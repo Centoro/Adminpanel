@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Projects · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="admin-projects.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+  .view-toggle { display: flex; gap: 4px; background: var(--bg-elevated); padding: 4px; border-radius: 6px; }
+  .view-btn { padding: 6px 12px; background: transparent; color: var(--text-secondary); border: none; border-radius: 4px; font-size: .8rem; cursor: pointer; }
+  .view-btn.active { background: var(--primary); color: #0f172a; }
+  .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .kanban-column { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; min-height: 440px; }
+  .kanban-column.drag-over { border-color: var(--primary); background: var(--bg-elevated); }
+  .kanban-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: grab; }
+  .kanban-card:hover { border-color: var(--primary); }
+  .progress-bar { height: 6px; background: var(--bg-surface); border-radius: 3px; overflow: hidden; margin: 6px 0; }
+  .progress-fill { height: 100%; background: var(--primary); }
+  .att-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: .8rem; margin: 0 6px 6px 0; }
+  .att-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .msg-row { background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .cc-badge { background: rgba(59,130,246,.15); color: #3b82f6; border-radius: 10px; padding: 2px 8px; font-size: .68rem; font-weight: 600; display: inline-block; margin: 2px; }
+  .folder-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .folder-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .folder-head h4 { color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+  .google-connect { background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); color: #fff; border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+  .google-connect.connected { background: linear-gradient(135deg, #10B981 0%, #059669 100%); }
+  .proj-avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #0f172a; display: inline-flex; align-items: center; justify-content: center; font-size: .6rem; font-weight: 800; margin-right: -6px; border: 2px solid var(--bg-surface); }
+
+  .ptabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+  .ptab { padding: 10px 16px; background: transparent; color: var(--text-secondary); font-weight: 600; border: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: .85rem; }
+  .ptab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  .msec { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .msec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .grip { cursor: grab; color: var(--text-muted); padding: 2px 6px; border-radius: 4px; user-select: none; }
+  .grip:hover { color: var(--primary); background: var(--bg-elevated); }
+  .msec.drag-over { border-color: var(--primary); }
+
+  .pipeline-board { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 20px; min-height: 300px; }
+  .pipeline-col { flex: 1; min-width: 240px; background: var(--bg-elevated); border-radius: var(--radius); padding: 12px; border: 1px solid var(--border); }
+  .pipeline-col h4 { font-size: .8rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 12px; display: flex; justify-content: space-between; }
+  .deal-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
+  .deal-card:hover { border-color: var(--primary); }
+  .deal-value { font-weight: 700; color: var(--success); font-size: .9rem; }
+  .deal-score { display: inline-block; background: rgba(59,130,246,.15); color: #3b82f6; padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: 700; }
+
+  @media (max-width: 900px) { .kanban { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar"><div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Projects</h1></div><div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div></header>
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Projects</h1><p>Drag & drop · folders & groups · attachments · Google connect · smart CC.</p></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="view-toggle"><button class="view-btn active" id="vb-board" onclick="setView('board')">Board</button><button class="view-btn" id="vb-list" onclick="setView('list')">List</button></div>
+          <button class="btn btn-primary" onclick="openProjectModal()"><i data-feather="plus"></i> New Project</button>
+        </div></div>
+
+      <div class="ptabs">
+        <button class="ptab active" onclick="switchTab('board', this)">Projects Board</button>
+        <button class="ptab" onclick="switchTab('pipeline', this)">Sales Pipeline</button>
+        <button class="ptab" onclick="switchTab('client360', this)">Client 360°</button>
+        <button class="ptab" onclick="switchTab('workload', this)">Workload & Profit</button>
+        <button class="ptab" onclick="switchTab('automations', this)">Automations</button>
+      </div>
+
+      <div id="ptab-board">
+        <div class="msec" data-sec="boardlist">
+          <div class="msec-head">
+            <span class="grip" draggable="true" ondragstart="secDragStart(event,'boardlist')" title="Drag to move">⋮⋮</span>
+            <span style="flex:1;cursor:pointer;font-weight:600;" onclick="toggleSec('sec-boardlist-body')">Projects Board / List</span>
+          </div>
+          <div id="sec-boardlist-body">
+            <div id="board-view" class="kanban"></div>
+            <div id="list-view" style="display:none;" class="card"><table class="data-table" style="padding:0;"><thead><tr><th>Code</th><th>Name</th><th>Client</th><th>Service</th><th>Budget</th><th>Progress</th><th>Status</th><th>Folders</th><th>Files</th><th></th></tr></thead><tbody id="projects-table"></tbody></table></div>
+          </div>
+        </div>
+
+        <div class="msec" data-sec="bigcal">
+          <div class="msec-head">
+            <span class="grip" draggable="true" ondragstart="secDragStart(event,'bigcal')" title="Drag to move">⋮⋮</span>
+            <span style="flex:1;cursor:pointer;font-weight:600;" onclick="toggleSec('sec-bigcal-body')">Company Calendar — projects, job cards, holidays & Black Friday</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn btn-secondary" style="padding:4px 8px;" onclick="changeBigCalMonth(-1)">‹</button>
+              <span id="big-cal-label" style="min-width:120px;text-align:center;font-size:.85rem;"></span>
+              <button class="btn btn-secondary" style="padding:4px 8px;" onclick="changeBigCalMonth(1)">›</button>
+            </div>
+          </div>
+          <div id="sec-bigcal-body">
+            <div id="big-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+            <small style="color:var(--text-muted);">Click any date to add notes, create job cards or projects, and see who is working. ★ = public holiday / Black Friday.</small>
+          </div>
+        </div>
+      </div>
+
+      <div id="ptab-pipeline" style="display:none;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <h3 style="color:var(--text-primary);">Sales Pipeline & Deal Management</h3>
+          <button class="btn btn-primary" onclick="openDealModal()">+ Add Deal / Lead</button>
+        </div>
+        <div class="pipeline-board" id="pipeline-board"></div>
+      </div>
+
+      <div id="ptab-client360" style="display:none;">
+        <div class="card"><div class="form-group"><label>Select Client for 360° Holistic View</label><select id="client-360-select" onchange="render360View()"></select></div></div>
+        <div id="client-360-dashboard"></div>
+      </div>
+
+      <div id="ptab-workload" style="display:none;">
+        <div class="grid-2">
+          <div class="card"><div class="card-header"><div class="card-title">Team Workload & Capacity</div></div><div id="workload-list"></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Project Profitability (Live)</div></div>
+            <div class="card" style="padding:0;margin:0;border:none;"><table class="data-table"><thead><tr><th>Project</th><th>Budget</th><th>Invoiced</th><th>Expenses</th><th>Profit</th><th>Margin</th></tr></thead><tbody id="profit-table"></tbody></table></div></div>
+        </div>
+      </div>
+
+      <div id="ptab-automations" style="display:none;">
+        <div class="card"><div class="card-header"><div class="card-title">Unlimited Automations (If This Then That)</div><button class="btn btn-primary" onclick="openAutomationModal()">+ Add Rule</button></div><div id="automations-list"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- PROJECT MODAL -->
+<div class="modal-overlay" id="project-modal"><div class="modal" style="max-width:720px;"><div class="modal-header"><div class="modal-title" id="pj-modal-title">New Project</div><button class="modal-close" onclick="closeM('project-modal')">✕</button></div>
+  <div class="modal-body"><input type="hidden" id="pj-id"><div class="form-grid">
+    <div class="form-group"><label>Name</label><input id="pj-name"></div>
+    <div class="form-group"><label>Client</label><select id="pj-client"></select></div>
+    <div class="form-group"><label>Service</label><select id="pj-service" onchange="toggleCustom()"></select></div>
+    <div class="form-group" id="pj-custom-wrap" style="display:none;"><label>Custom</label><input id="pj-custom"></div>
+    <div class="form-group"><label>Budget (ZAR)</label><input type="number" id="pj-budget"></div>
+    <div class="form-group"><label>Due</label><input type="date" id="pj-due"></div>
+    <div class="form-group"><label>Priority</label><select id="pj-priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+    <div class="form-group"><label>Status</label><select id="pj-status"><option value="planning">Planning</option><option value="in_progress">In Progress</option><option value="completed">Completed</option></select></div>
+  </div>
+  <div class="form-group"><label>Quick Add Client (if not listed)</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input id="pj-nc-name" placeholder="Client name" style="flex:2;min-width:140px;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+      <input id="pj-nc-email" placeholder="Email" style="flex:2;min-width:140px;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+      <button type="button" class="btn btn-secondary" onclick="quickAddProjClient()">+ Add Client</button>
+    </div>
+  </div>
+  <div class="form-group"><label>Team</label><div id="pj-team" style="display:flex;gap:8px;flex-wrap:wrap;"></div></div>
+  <div class="form-group"><label>Description</label><textarea id="pj-desc" rows="2"></textarea></div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('project-modal')">Cancel</button><button class="btn btn-primary" onclick="saveProject()">Save</button></div></div></div>
+
+<!-- PROJECT DETAIL -->
+<div class="modal-overlay" id="detail-modal"><div class="modal" style="max-width:920px;"><div class="modal-header"><div class="modal-title" id="dt-title"></div><button class="modal-close" onclick="closeM('detail-modal')">✕</button></div>
+  <div class="modal-body" id="detail-body">
+    <div id="dt-info" style="margin-bottom:12px;"></div>
+    <div class="form-group"><label>Progress: <span id="dt-prog-val"></span></label><input type="range" id="dt-progress" min="0" max="100" step="5" oninput="updateProgress(this.value)" style="width:100%;accent-color:var(--primary);"></div>
+
+    <div id="google-connect-card"></div>
+
+    <div class="msec" data-sec="folders">
+      <div class="msec-head">
+        <span class="grip" draggable="true" ondragstart="secDragStart(event,'folders')" title="Drag to move">⋮⋮</span>
+        <span style="flex:1;cursor:pointer;font-weight:600;" onclick="toggleSec('sec-folders-body')">Folders & Groups</span>
+        <button class="btn btn-secondary" onclick="addFolder(currentDetail)">+ New Folder</button>
+      </div>
+      <div id="sec-folders-body"><div id="folder-list"></div></div>
+    </div>
+
+    <div class="msec" data-sec="projcal">
+      <div class="msec-head">
+        <span class="grip" draggable="true" ondragstart="secDragStart(event,'projcal')" title="Drag to move">⋮⋮</span>
+        <span style="flex:1;cursor:pointer;font-weight:600;" onclick="toggleSec('sec-projcal-body')">Project Calendar (syncs with Dashboard & Company Calendar)</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-secondary" style="padding:4px 8px;" onclick="changeProjCalMonth(-1)">‹</button>
+          <span id="pc-month-label" style="min-width:110px;text-align:center;font-size:.8rem;"></span>
+          <button class="btn btn-secondary" style="padding:4px 8px;" onclick="changeProjCalMonth(1)">›</button>
+        </div>
+      </div>
+      <div id="sec-projcal-body"><div id="project-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+      <small style="color:var(--text-muted);">Click a date to add notes, job cards or projects — synced everywhere. ★ = holiday.</small></div>
+    </div>
+
+    <div class="msec" data-sec="thread">
+      <div class="msec-head">
+        <span class="grip" draggable="true" ondragstart="secDragStart(event,'thread')" title="Drag to move">⋮⋮</span>
+        <span style="flex:1;cursor:pointer;font-weight:600;" onclick="toggleSec('sec-thread-body')">Project Thread (CC staff / teams / client)</span>
+      </div>
+      <div id="sec-thread-body">
+        <div id="dt-thread" style="max-height:260px;overflow-y:auto;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input id="tm-text" placeholder="Write an update, @mention staff..." style="flex:1;min-width:180px;padding:10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);">
+          <label class="btn btn-secondary" style="cursor:pointer;">Image<input type="file" id="tm-image" accept="image/*" style="display:none;"></label>
+          <button class="btn btn-primary" onclick="sendThreadMsg()">Send</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <small style="color:var(--text-muted);">CC:</small>
+          <select id="tm-cc-target" style="padding:6px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:.8rem;">
+            <option value="">+ Add to CC</option>
+            <optgroup label="Teams"><option value="__team__">Select team...</option></optgroup>
+            <optgroup label="Staff"><option value="__staff__">Select staff...</option></optgroup>
+            <optgroup label="Other"><option value="__client__">Client of this project</option></optgroup>
+          </select>
+          <div id="tm-cc-badges" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="msec" data-sec="jobs">
+      <div class="msec-head">
+        <span class="grip" draggable="true" ondragstart="secDragStart(event,'jobs')" title="Drag to move">⋮⋮</span>
+        <span style="flex:1;cursor:pointer;font-weight:600;" onclick="toggleSec('sec-jobs-body')">Linked Job Cards</span>
+      </div>
+      <div id="sec-jobs-body"><div id="dt-jobs"></div></div>
+    </div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="editFromDetail()">Edit</button><button class="btn btn-primary" onclick="closeM('detail-modal')">Close</button></div></div></div>
+
+<!-- VIEW ATTACHMENT -->
+<div class="modal-overlay" id="view-file-modal"><div class="modal" style="max-width:700px;"><div class="modal-header"><div class="modal-title" id="vf-title"></div><button class="modal-close" onclick="closeM('view-file-modal')">✕</button></div><div class="modal-body" id="vf-body" style="text-align:center;"></div><div class="modal-footer"><button class="btn btn-primary" id="vf-download">⬇ Download</button></div></div></div>
+
+<!-- DATE MODAL -->
+<div class="modal-overlay" id="date-modal"><div class="modal" style="max-width:520px;"><div class="modal-header"><div class="modal-title" id="date-modal-title"></div><button class="modal-close" onclick="closeM('date-modal')">✕</button></div>
+  <div class="modal-body">
+    <div id="date-modal-body"></div>
+    <div class="form-group" style="margin-top:12px;">
+      <label>Add Note / Schedule for this date</label>
+      <textarea id="date-note-text" rows="2" placeholder="e.g. Site visit, team on site, delivery, photoshoot..."></textarea>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeM('date-modal')">Close</button>
+    <button class="btn btn-secondary" onclick="dateAddNote()">+ Add Note</button>
+    <button class="btn btn-secondary" onclick="dateCreateJob()">+ Job Card</button>
+    <button class="btn btn-primary" onclick="dateCreateProject()">+ Project</button>
+  </div></div></div>
+
+<!-- JOB CARD MODAL -->
+<div class="modal-overlay" id="pjob-modal"><div class="modal"><div class="modal-header"><div class="modal-title">Issue Job Card</div><button class="modal-close" onclick="closeM('pjob-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Job Title</label><input id="jc-title"></div>
+    <div class="form-group"><label>Client</label><select id="jc-client"></select></div>
+    <div class="form-group"><label>Service</label><select id="jc-service"></select></div>
+    <div class="form-group"><label>Assigned To</label><select id="jc-assignee"></select></div>
+    <div class="form-group"><label>Due Date</label><input type="date" id="jc-due"></div>
+    <div class="form-group"><label>Hours</label><input type="number" id="jc-hours" step="0.5" value="1"></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('pjob-modal')">Cancel</button><button class="btn btn-primary" onclick="saveJobCard()">Save Job Card</button></div></div></div>
+
+<!-- DEAL MODAL -->
+<div class="modal-overlay" id="deal-modal"><div class="modal"><div class="modal-header"><div class="modal-title">Add Deal / Lead</div><button class="modal-close" onclick="closeM('deal-modal')">✕</button></div>
+  <div class="modal-body"><input type="hidden" id="deal-id"><div class="form-grid">
+    <div class="form-group"><label>Deal Name</label><input type="text" id="deal-name"></div>
+    <div class="form-group"><label>Client</label><select id="deal-client"></select></div>
+    <div class="form-group"><label>Expected Value (ZAR)</label><input type="number" id="deal-value" step="0.01"></div>
+    <div class="form-group"><label>Probability (%)</label><input type="number" id="deal-score" min="0" max="100" value="50"></div>
+    <div class="form-group"><label>Stage</label><select id="deal-stage"><option>Lead</option><option>Qualified</option><option>Proposal</option><option>Negotiation</option><option>Won</option><option>Lost</option></select></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('deal-modal')">Cancel</button><button class="btn btn-primary" onclick="saveDeal()">Save Deal</button></div></div></div>
+
+<!-- AUTOMATION MODAL -->
+<div class="modal-overlay" id="auto-modal"><div class="modal"><div class="modal-header"><div class="modal-title">Add Automation Rule</div><button class="modal-close" onclick="closeM('auto-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Trigger (If...)</label><select id="auto-trigger"><option value="project_completed">Project Status → Completed</option><option value="project_in_progress">Project Status → In Progress</option><option value="deal_won">Deal Stage → Won</option></select></div>
+    <div class="form-group"><label>Action (Then...)</label><select id="auto-action"><option value="create_invoice">Auto-Generate Invoice</option><option value="notify_staff">Notify Assigned Staff</option><option value="create_jobcard">Create Standard Job Card</option></select></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('auto-modal')">Cancel</button><button class="btn btn-primary" onclick="saveAutomation()">Save Rule</button></div></div></div>
+
+<script src="centoroapi.js"></script>
+<script src="admin-projects.js"></script>
+<script>
+  initApp('admin-projects.html', 'Projects');
+  if (!DB.google) DB.google = { connected: false, email: '', driveFolders: [] };
+  if (!DB.deals) DB.deals = [];
+  if (!DB.automations) DB.automations = [];
+  if (!DB.calendarNotes) DB.calendarNotes = [];
+
+  let currentView = 'board', currentDetail = null, ccList = [];
+  let bigCalDate = new Date(), projCalDate = new Date();
+  let dateModalDate = null, dateModalProjectId = null;
+  let dragSecKey = null;
+
+  const HOLIDAYS = [
+    { date: '2026-01-01', name: "New Year's Day" }, { date: '2026-03-21', name: 'Human Rights Day' },
+    { date: '2026-04-03', name: 'Good Friday' }, { date: '2026-04-06', name: 'Family Day' },
+    { date: '2026-04-27', name: 'Freedom Day' }, { date: '2026-05-01', name: "Workers' Day" },
+    { date: '2026-06-16', name: 'Youth Day' }, { date: '2026-08-10', name: "National Women's Day (obs)" },
+    { date: '2026-09-24', name: 'Heritage Day' }, { date: '2026-11-27', name: 'Black Friday' },
+    { date: '2026-12-16', name: 'Day of Reconciliation' }, { date: '2026-12-25', name: 'Christmas Day' },
+    { date: '2026-12-26', name: 'Day of Goodwill' }
+  ];
+  function getHoliday(ds) { return HOLIDAYS.find(h => h.date === ds); }
+  function cleanName(n) { return String(n || '').replace(/^[^A-Za-z0-9]+/, '').trim(); }
+
+  function closeM(id) { document.getElementById(id).classList.remove('active'); }
+  function toggleSec(id) { const b = document.getElementById(id); if (!b) return; b.style.display = (b.style.display === 'none') ? '' : 'none'; }
+
+  function setView(v) { currentView = v; document.getElementById('vb-board').className = 'view-btn' + (v === 'board' ? ' active' : ''); document.getElementById('vb-list').className = 'view-btn' + (v === 'list' ? ' active' : ''); document.getElementById('board-view').style.display = v === 'board' ? 'grid' : 'none'; document.getElementById('list-view').style.display = v === 'list' ? 'block' : 'none'; }
+  function switchTab(t, btn) {
+    document.querySelectorAll('.ptab').forEach(x => x.classList.remove('active'));
+    btn.classList.add('active');
+    ['board','pipeline','client360','workload','automations'].forEach(x => { document.getElementById('ptab-' + x).style.display = (x === t) ? 'block' : 'none'; });
+    if (t === 'board') renderBigCalendar();
+    if (t === 'pipeline') renderPipeline();
+    if (t === 'client360') populate360();
+    if (t === 'workload') renderWorkload();
+    if (t === 'automations') renderAutomations();
+  }
+
+  /* ── movable / collapsible sections (reliable) ── */
+  function secDragStart(e, key) {
+    e.stopPropagation();
+    e.dataTransfer.setData('text/plain', 'SEC:' + key);
+    e.dataTransfer.effectAllowed = 'move';
+    dragSecKey = key;
+  }
+  function initMovable(scopeSelector, storeKey) {
+    const parent = document.querySelector(scopeSelector);
+    if (!parent || parent.dataset.movableInit) return;
+    parent.dataset.movableInit = '1';
+
+    parent.querySelectorAll('.msec').forEach(m => {
+      m.addEventListener('dragover', e => { if (!dragSecKey) return; e.preventDefault(); m.classList.add('drag-over'); });
+      m.addEventListener('dragleave', () => m.classList.remove('drag-over'));
+      m.addEventListener('drop', e => {
+        if (!dragSecKey) return;
+        e.preventDefault(); e.stopPropagation();
+        parent.querySelectorAll('.msec').forEach(x => x.classList.remove('drag-over'));
+        const dragEl = parent.querySelector(`.msec[data-sec="${dragSecKey}"]`);
+        if (dragEl && dragEl !== m && dragEl.parentNode === m.parentNode) {
+          const rect = m.getBoundingClientRect();
+          const before = (e.clientY < rect.top + rect.height / 2);
+          m.parentNode.insertBefore(dragEl, before ? m : m.nextSibling);
+          saveSecOrder(scopeSelector, storeKey);
+        }
+        dragSecKey = null;
+      });
+    });
+
+    document.addEventListener('dragend', () => {
+      dragSecKey = null;
+      parent.querySelectorAll('.msec').forEach(x => x.classList.remove('drag-over'));
+    });
+  }
+  function saveSecOrder(scope, key) {
+    DB.projectSectionOrder = DB.projectSectionOrder || {};
+    DB.projectSectionOrder[key] = [...document.querySelectorAll(scope + ' .msec')].map(m => m.dataset.sec);
+    saveDB();
+  }
+  function applySecOrder(scope, key) {
+    const order = (DB.projectSectionOrder || {})[key] || [];
+    const parent = document.querySelector(scope);
+    if (!parent) return;
+    order.forEach(k => { const el = parent.querySelector(`.msec[data-sec="${k}"]`); if (el) parent.appendChild(el); });
+  }
+
+  function dragStart(e, id) { e.dataTransfer.setData('text/plain', id); }
+  function allowDrop(e) { e.preventDefault(); }
+  function dragOverCol(e, on) { e.currentTarget.classList.toggle('drag-over', on); }
+  function drop(e, status) { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); const id = e.dataTransfer.getData('text/plain'); if (id && id.startsWith('SEC:')) return; const p = getProject(id); if (p && p.status !== status) { p.status = status; if (status === 'completed') p.progress = 100; saveDB(); logActivity(`moved ${p.name} to ${status.replace('_', ' ')}`, 'briefcase', 'info'); checkAutomations(id, status); renderProjects(); } }
+
+  function renderProjects() {
+    const cols = { planning: { label: 'Planning', color: 'info' }, in_progress: { label: 'In Progress', color: 'warning' }, completed: { label: 'Completed', color: 'success' } };
+    document.getElementById('board-view').innerHTML = Object.entries(cols).map(([key, c]) => { const items = DB.projects.filter(p => p.status === key); return `<div class="kanban-column" ondragover="allowDrop(event)" ondragenter="dragOverCol(event,true)" ondragleave="dragOverCol(event,false)" ondrop="drop(event,'${key}')"><div style="display:flex;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);"><span class="badge badge-${c.color}">${c.label}</span><span style="color:var(--text-muted);font-size:.75rem;">${items.length}</span></div>${items.map(p => { const cl = getClient(p.clientId); const atts = (p.folders || []).reduce((s, f) => s + (f.attachments || []).length, 0); return `<div class="kanban-card" draggable="true" ondragstart="dragStart(event,'${p.id}')" onclick="openDetail('${p.id}')"><div style="display:flex;justify-content:space-between;gap:6px;"><strong>${p.name}</strong><span class="badge badge-${p.priority === 'high' ? 'danger' : p.priority === 'medium' ? 'warning' : 'info'}">${p.priority}</span></div><div style="font-size:.75rem;color:var(--text-secondary);margin:4px 0;">${cl ? cl.name : '—'}${p.service ? ' · ' + p.service : ''}</div><div class="progress-bar"><div class="progress-fill" style="width:${p.progress}%"></div></div><div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--text-muted);"><span>${fmtZAR(p.budget)}</span><span>${(p.folders || []).length} folders · ${atts} files</span></div></div>`; }).join('')}</div>`; }).join('');
+    document.getElementById('projects-table').innerHTML = DB.projects.map(p => { const cl = getClient(p.clientId); const atts = (p.folders || []).reduce((s, f) => s + (f.attachments || []).length, 0); return `<tr><td><strong>${p.code}</strong></td><td>${p.name}</td><td>${cl ? cl.name : '—'}</td><td>${p.service || '—'}</td><td>${fmtZAR(p.budget)}</td><td><div class="progress-bar"><div class="progress-fill" style="width:${p.progress}%"></div></div><small>${p.progress}%</small></td><td><span class="badge badge-${p.status === 'completed' ? 'success' : p.status === 'in_progress' ? 'warning' : 'info'}">${p.status.replace('_', ' ')}</span></td><td>${(p.folders || []).length}</td><td>${atts}</td><td style="white-space:nowrap;"><button class="btn btn-secondary" onclick="openDetail('${p.id}')">Open</button> <button class="btn btn-secondary" onclick="editProject('${p.id}')">Edit</button> <button class="btn btn-danger" onclick="deleteProjectApi('${p.id}')">✕</button></td></tr>`; }).join('');
+  }
+
+  async function deleteProjectApi(id) {
+    if (!confirm('Delete this project?')) return;
+    try { await ApiService.deleteProject(Number(id)); DB.projects = DB.projects.filter(p => String(p.id) !== String(id)); renderProjects(); }
+    catch (error) { alert(error.message || 'Unable to delete project.'); }
+  }
+
+  function connectGoogle() {
+    if (DB.google.connected) { if (confirm('Disconnect Google account?')) { DB.google.connected = false; DB.google.email = ''; DB.google.driveFolders = []; saveDB(); renderDetail(currentDetail); } return; }
+    const em = prompt('Connect your company Google Account (e.g. centoroenterprise@gmail.com):');
+    if (!em) return;
+    DB.google.connected = true; DB.google.email = em;
+    DB.google.driveFolders = [ { name: 'Shared with me', count: 12 }, { name: 'Client Deliverables', count: 24 }, { name: 'Templates', count: 8 } ];
+    saveDB(); renderDetail(currentDetail);
+    logActivity('connected Google account ' + em, 'link', 'success');
+    alert('✅ Google connected. Attach Docs/Sheets to any folder.');
+  }
+  function renderGoogleCard() {
+    const el = document.getElementById('google-connect-card');
+    if (DB.google.connected) {
+      el.innerHTML = `<div class="google-connect connected"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><div><strong style="font-size:1.1rem;">✓ Google Connected</strong><div style="font-size:.85rem;opacity:.9;margin-top:2px;">${DB.google.email} · ${DB.google.driveFolders.length} Drive folders accessible</div></div><div style="display:flex;gap:6px;"><button class="btn btn-secondary" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);" onclick="connectGoogle()">Disconnect</button></div></div><div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">${DB.google.driveFolders.map(f => `<span style="background:rgba(255,255,255,.15);padding:4px 10px;border-radius:16px;font-size:.75rem;">${f.name} (${f.count})</span>`).join('')}</div></div>`;
+    } else {
+      el.innerHTML = `<div class="google-connect"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><div><strong style="font-size:1.1rem;">Connect Company Google Account</strong><div style="font-size:.85rem;opacity:.9;margin-top:2px;">Attach Docs, Sheets & Drive files to project folders. Full sync via your backend API.</div></div><button class="btn btn-primary" style="background:#fff;color:#4285F4;" onclick="connectGoogle()">Connect Google</button></div></div>`;
+    }
+  }
+
+  function isImg(name) { return /\.(png|jpe?g|gif|webp)$/i.test(name || ''); }
+  function isDoc(name) { return /\.(pdf|docx?|xlsx?|pptx?)$/i.test(name || ''); }
+  function isMedia(name) { return /\.(mp3|wav|mp4|mov)$/i.test(name || ''); }
+  function fileIcon(name) { if (isImg(name)) return '🖼️'; if (isDoc(name)) return '📄'; if (isMedia(name)) return '🎵'; if (/\.zip|\.rar$/i.test(name)) return '📦'; return '📎'; }
+
+  function addFolder(pid) { const p = getProject(pid); const name = prompt('Folder name (e.g. Branding, Client Docs, Deliverables):'); if (!name) return; p.folders = p.folders || []; p.folders.push({ id: 'FLD-' + Date.now(), name: name, attachments: [] }); saveDB(); renderDetail(pid); logActivity(`added folder "${name}" to ${p.name}`, 'folder', 'info'); }
+  function renameFolder(pid, fid) { const p = getProject(pid); const f = p.folders.find(x => x.id === fid); if (!f) return; const name = prompt('Rename folder:', cleanName(f.name)); if (!name) return; f.name = name; saveDB(); renderDetail(pid); }
+  function deleteFolder(pid, fid) { if (!confirm('Delete this folder and all its attachments?')) return; const p = getProject(pid); p.folders = p.folders.filter(x => x.id !== fid); saveDB(); renderDetail(pid); }
+  function uploadToFolder(pid, fid, input) { const f = input.files[0]; if (!f) return; const p = getProject(pid); const folder = p.folders.find(x => x.id === fid); const rec = { id: 'ATT-' + Date.now(), name: f.name, fileType: (f.name.split('.').pop() || 'FILE').toUpperCase(), size: (f.size / 1024).toFixed(0) + ' KB', dataUrl: null, uploadedAt: new Date().toISOString().slice(0, 10), by: getCurrentUser().name || 'Admin' }; folder.attachments.push(rec); storeMedia(rec, f); saveDB(); renderDetail(pid); input.value = ''; logActivity(`attached ${f.name} to ${folder.name}`, 'paperclip', 'success'); }
+  function attachGoogleDoc(pid, fid) { if (!DB.google.connected) { alert('Connect Google first.'); return; } const name = prompt('Google Doc/Sheet name:'); if (!name) return; const url = prompt('Google link (https://docs.google.com/...):'); if (!url) return; const p = getProject(pid); const folder = p.folders.find(x => x.id === fid); folder.attachments.push({ id: 'GDC-' + Date.now(), name: name + ' (Google)', fileType: 'GOOGLE', size: 'Cloud', dataUrl: null, googleUrl: url, uploadedAt: new Date().toISOString().slice(0, 10), by: getCurrentUser().name || 'Admin' }); saveDB(); renderDetail(pid); logActivity(`linked Google doc "${name}" to ${folder.name}`, 'link', 'info'); }
+  function viewAttachment(pid, fid, aid) {
+    const p = getProject(pid); const folder = p.folders.find(x => x.id === fid); const a = folder.attachments.find(x => x.id === aid);
+    document.getElementById('vf-title').textContent = a.name;
+    const body = document.getElementById('vf-body'); const dl = document.getElementById('vf-download');
+    if (a.googleUrl) { body.innerHTML = `<div style="padding:20px;"><strong>Google File</strong><p style="margin:10px 0;color:var(--text-muted);">Opens in Google Docs/Sheets</p><a href="${a.googleUrl}" target="_blank" class="btn btn-primary">Open in Google ↗</a></div>`; dl.style.display = 'none'; }
+    else { const src = mediaSrc(a); if (!src) { body.innerHTML = '<p>File unavailable in this session.</p>'; dl.style.display = 'none'; return; }
+      if (isImg(a.name)) { body.innerHTML = `<img src="${src}" style="max-width:100%;border-radius:10px;">`; dl.style.display = ''; dl.onclick = () => { const el = document.createElement('a'); el.href = src; el.download = a.name; el.click(); }; }
+      else if (isMedia(a.name)) { body.innerHTML = `<audio controls src="${src}" style="width:100%;"></audio>`; dl.style.display = ''; dl.onclick = () => { const el = document.createElement('a'); el.href = src; el.download = a.name; el.click(); }; }
+      else if (a.fileType === 'PDF') { body.innerHTML = `<iframe src="${src}" style="width:100%;height:70vh;border:none;border-radius:8px;"></iframe>`; dl.style.display = ''; dl.onclick = () => { const el = document.createElement('a'); el.href = src; el.download = a.name; el.click(); }; }
+      else { body.innerHTML = `<div style="padding:20px;"><strong>${fileIcon(a.name)} ${a.name}</strong><p style="margin:10px 0;color:var(--text-muted);">${a.fileType} · ${a.size || '—'}</p></div>`; dl.style.display = ''; dl.onclick = () => { const el = document.createElement('a'); el.href = src; el.download = a.name; el.click(); }; } }
+    document.getElementById('view-file-modal').classList.add('active');
+  }
+  function deleteAttachment(pid, fid, aid) { if (!confirm('Remove this attachment?')) return; const p = getProject(pid); const f = p.folders.find(x => x.id === fid); f.attachments = f.attachments.filter(x => x.id !== aid); saveDB(); renderDetail(pid); }
+
+  function renderFolders(pid) {
+    const p = getProject(pid); p.folders = p.folders || [];
+    document.getElementById('folder-list').innerHTML = p.folders.map(f => {
+      const atts = f.attachments || [];
+      return `<div class="folder-card"><div class="folder-head"><h4><i data-feather="folder" style="width:18px;height:18px;color:var(--primary);"></i> ${cleanName(f.name)} <span class="badge badge-neutral">${atts.length} file(s)</span></h4>
+        <div style="display:flex;gap:6px;">
+          <label class="btn btn-primary" style="cursor:pointer;padding:6px 12px;font-size:.8rem;"><i data-feather="upload" style="width:13px;height:13px;"></i> Upload File<input type="file" accept="*/*" style="display:none;" onchange="uploadToFolder('${pid}','${f.id}', this)"></label>
+          ${DB.google.connected ? `<button class="btn btn-secondary" onclick="attachGoogleDoc('${pid}','${f.id}')" style="padding:6px 12px;font-size:.8rem;">Google Doc</button>` : ''}
+          <button class="btn btn-secondary" onclick="renameFolder('${pid}','${f.id}')" style="padding:6px 10px;font-size:.8rem;">✏️</button>
+          <button class="btn btn-danger" onclick="deleteFolder('${pid}','${f.id}')" style="padding:6px 10px;font-size:.8rem;">✕</button>
+        </div></div>
+        ${atts.length ? atts.map(a => `<div class="att-chip" style="cursor:pointer;" onclick="viewAttachment('${pid}','${f.id}','${a.id}')">${isImg(a.name) && mediaSrc(a) ? `<img class="att-thumb" src="${mediaSrc(a)}">` : `<span style="font-size:1.2rem;">${fileIcon(a.name)}</span>`}<span><strong>${cleanName(a.name)}</strong><br><small style="color:var(--text-muted);">${a.fileType}${a.size ? ' · ' + a.size : ''} · ${a.by}</small></span><button class="btn btn-danger" style="padding:3px 8px;font-size:.7rem;" onclick="event.stopPropagation();deleteAttachment('${pid}','${f.id}','${a.id}')">✕</button></div>`).join('') : '<small style="color:var(--text-muted);">Empty — upload files or attach from Google Drive.</small>'}</div>`;
+    }).join('') || '<p style="color:var(--text-muted);text-align:center;padding:20px;">No folders yet — click "+ New Folder".</p>';
+    feather.replace();
+  }
+
+  function renderThread(pid) {
+    const msgs = DB.projectMessages.filter(m => m.projectId === pid);
+    document.getElementById('dt-thread').innerHTML = msgs.map(m => { const s = getStaff(m.staffId); return `<div class="msg-row"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><strong style="color:var(--primary);">${s ? s.name : 'Admin'}</strong><span style="font-size:.7rem;color:var(--text-muted);">${new Date(m.time).toLocaleString('en-ZA')}</span></div><div style="font-size:.9rem;margin-top:4px;">${m.text}</div>${m.image ? `<img src="${m.image}" style="max-width:140px;border-radius:8px;margin-top:6px;">` : ''}<div style="margin-top:6px;">${(m.cc || []).map(cid => { if (cid === '__client__') { const p = getProject(pid); const cl = getClient(p.clientId); return `<span class="cc-badge">Client: ${cl ? cl.name : ''}</span>`; } if (cid.startsWith('TM-')) { const t = DB.teams.find(x => x.id === cid); return t ? `<span class="cc-badge">Team: ${t.name}</span>` : ''; } const staff = getStaff(cid); return staff ? `<span class="cc-badge">${staff.name}</span>` : ''; }).join('')}</div></div>`; }).join('') || '<small style="color:var(--text-muted);">No messages yet.</small>';
+    const sel = document.getElementById('tm-cc-target');
+    const teamOpts = (DB.teams || []).map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    const staffOpts = DB.staff.map(s => `<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+    sel.innerHTML = `<option value="">+ Add to CC</option><optgroup label="Teams">${teamOpts || '<option disabled>No teams</option>'}</optgroup><optgroup label="Staff">${staffOpts}</optgroup><optgroup label="Other"><option value="__client__">Client of this project</option></optgroup>`;
+    sel.onchange = function() { const v = this.value; if (v && !ccList.includes(v)) { ccList.push(v); renderCcBadges(); } this.value = ''; };
+    renderCcBadges();
+  }
+  function renderCcBadges() {
+    document.getElementById('tm-cc-badges').innerHTML = ccList.map(cid => { let label = cid; if (cid === '__client__') { const p = getProject(currentDetail); const cl = getClient(p.clientId); label = 'Client: ' + (cl ? cl.name : ''); } else if (cid.startsWith('TM-')) { const t = DB.teams.find(x => x.id === cid); label = 'Team: ' + (t ? t.name : ''); } else { const s = getStaff(cid); label = s ? s.name.split(' ')[0] : cid; } return `<span class="cc-badge">${label} <button style="background:none;border:none;color:#3b82f6;cursor:pointer;padding:0 0 0 4px;" onclick="removeCc('${cid}')">×</button></span>`; }).join('');
+  }
+  function removeCc(id) { ccList = ccList.filter(x => x !== id); renderCcBadges(); }
+  function sendThreadMsg() {
+    const text = document.getElementById('tm-text').value.trim(); const imgFile = document.getElementById('tm-image').files[0];
+    if (!text && !imgFile) { alert('Write something or attach an image.'); return; }
+    const me = getCurrentUser();
+    const push = (imgSrc) => { DB.projectMessages.push({ id: nextId('PMG', 'projectMessages'), projectId: currentDetail, staffId: me.staffId || 'STF-0001', text: text || '(image)', image: imgSrc, cc: [...ccList], time: new Date().toISOString() }); saveDB(); document.getElementById('tm-text').value = ''; document.getElementById('tm-image').value = ''; ccList = []; renderThread(currentDetail); renderProjects(); };
+    if (imgFile) { const r = new FileReader(); r.onload = () => push(r.result); r.readAsDataURL(imgFile); } else push(null);
+  }
+
+  function changeProjCalMonth(d) { projCalDate.setMonth(projCalDate.getMonth() + d); renderProjectCalendar(); }
+  function renderProjectCalendar() {
+    const p = getProject(currentDetail); if (!p) return;
+    const year = projCalDate.getFullYear(), month = projCalDate.getMonth();
+    document.getElementById('pc-month-label').textContent = projCalDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const firstDay = new Date(year, month, 1).getDay(); const days = new Date(year, month + 1, 0).getDate();
+    const jobs = DB.jobCards.filter(j => j.projectId === currentDetail);
+    const notes = DB.calendarNotes.filter(n => n.date && n.date.startsWith(`${year}-${String(month+1).padStart(2,'0')}`));
+    let html = ['S','M','T','W','T','F','S'].map(d => `<div style="text-align:center;font-size:.65rem;color:var(--text-muted);font-weight:700;">${d}</div>`).join('');
+    for (let i = 0; i < firstDay; i++) html += '<div></div>';
+    for (let d = 1; d <= days; d++) {
+      const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const hol = getHoliday(ds); const isDue = p.dueDate === ds;
+      const jobHere = jobs.filter(j => j.dueDate === ds);
+      const noteHere = notes.filter(n => n.date === ds);
+      const bg = isDue ? 'var(--primary)' : (hol ? 'rgba(220,38,38,.2)' : (jobHere.length || noteHere.length ? 'var(--bg-input)' : 'transparent'));
+      const color = isDue ? '#0f172a' : 'var(--text-primary)';
+      html += `<div onclick="openDateModal('${ds}', currentDetail)" title="${hol ? hol.name : ''}" style="min-height:34px;background:${bg};color:${color};border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:.7rem;cursor:pointer;">${d}</div>`;
+    }
+    document.getElementById('project-calendar').innerHTML = html;
+  }
+
+  function changeBigCalMonth(d) { bigCalDate.setMonth(bigCalDate.getMonth() + d); renderBigCalendar(); }
+  function renderBigCalendar() {
+    const year = bigCalDate.getFullYear(), month = bigCalDate.getMonth();
+    document.getElementById('big-cal-label').textContent = bigCalDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const firstDay = new Date(year, month, 1).getDay(); const days = new Date(year, month + 1, 0).getDate();
+    const today = new Date().toISOString().slice(0, 10);
+    let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div style="text-align:center;font-size:.7rem;color:var(--text-muted);font-weight:700;">${d}</div>`).join('');
+    for (let i = 0; i < firstDay; i++) html += '<div></div>';
+    for (let d = 1; d <= days; d++) {
+      const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const hol = getHoliday(ds);
+      const projs = DB.projects.filter(p => p.dueDate === ds);
+      const jobs = DB.jobCards.filter(j => j.dueDate === ds);
+      const notes = DB.calendarNotes.filter(n => n.date === ds);
+      const staffIds = new Set(); projs.forEach(p => (p.assignees || []).forEach(a => staffIds.add(a))); jobs.forEach(j => { if (j.assigneeId) staffIds.add(j.assigneeId); });
+      const isToday = ds === today;
+      const bg = hol ? 'rgba(220,38,38,.15)' : (projs.length || jobs.length ? 'var(--bg-elevated)' : 'transparent');
+      const border = isToday ? '2px solid var(--primary)' : (hol ? '1px solid var(--danger)' : '1px solid var(--border)');
+      html += `<div onclick="openDateModal('${ds}', null)" style="min-height:74px;background:${bg};border:${border};border-radius:6px;padding:4px;cursor:pointer;font-size:.75rem;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;"><strong>${d}</strong>${hol ? '<span style="color:var(--danger);font-size:.6rem;">★</span>' : ''}</div>
+        ${hol ? `<div style="color:var(--danger);font-size:.6rem;line-height:1.1;">${hol.name}</div>` : ''}
+        ${projs.slice(0,2).map(p => `<div style="background:var(--primary);color:#0f172a;border-radius:3px;padding:1px 3px;margin-top:2px;font-size:.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>`).join('')}
+        ${jobs.slice(0,1).map(j => `<div style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 3px;margin-top:2px;font-size:.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${j.title}</div>`).join('')}
+        ${staffIds.size ? `<div style="margin-top:2px;">${[...staffIds].slice(0,4).map(sid => { const s = getStaff(sid); return s ? `<span class="proj-avatar" title="${s.name}">${s.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}</span>` : ''; }).join('')}</div>` : ''}
+      </div>`;
+    }
+    document.getElementById('big-calendar').innerHTML = html;
+  }
+
+  function openDateModal(ds, projectId) {
+    dateModalDate = ds; dateModalProjectId = projectId || null;
+    const hol = getHoliday(ds);
+    const projs = DB.projects.filter(p => p.dueDate === ds);
+    const jobs = DB.jobCards.filter(j => j.dueDate === ds);
+    const notes = DB.calendarNotes.filter(n => n.date === ds);
+    let html = hol ? `<div style="margin-bottom:10px;"><span class="badge badge-danger">★ ${hol.name}</span></div>` : '';
+    html += projs.map(p => `<div class="msg-row"><strong>${p.name}</strong> — ${getClient(p.clientId) ? getClient(p.clientId).name : ''} <span class="badge badge-info">${p.status.replace('_',' ')}</span><br><small>Working: ${(p.assignees || []).map(a => { const s = getStaff(a); return s ? s.name : ''; }).filter(Boolean).join(', ') || '—'}</small></div>`).join('');
+    html += jobs.map(j => `<div class="msg-row"><strong>${j.title}</strong> — ${getStaff(j.assigneeId) ? getStaff(j.assigneeId).name : 'Unassigned'}</div>`).join('');
+    html += notes.map(n => `<div class="msg-row">${n.text}<br><small>${n.createdBy || ''}</small></div>`).join('');
+    if (!hol && !projs.length && !jobs.length && !notes.length) html = '<p style="color:var(--text-muted);">Nothing scheduled.</p>';
+    document.getElementById('date-modal-body').innerHTML = html;
+    document.getElementById('date-modal-title').textContent = fmtDate(ds);
+    document.getElementById('date-note-text').value = '';
+    document.getElementById('date-modal').classList.add('active');
+  }
+  function dateAddNote() {
+    const t = document.getElementById('date-note-text').value.trim();
+    if (!t) { alert('Please type a note first.'); return; }
+    DB.calendarNotes.push({ id: nextId('CND', 'calendarNotes'), date: dateModalDate, projectId: dateModalProjectId, text: t, importance: 'medium', createdBy: getCurrentUser().name || 'Admin' });
+    saveDB();
+    document.getElementById('date-note-text').value = '';
+    renderBigCalendar();
+    if (currentDetail) renderProjectCalendar();
+    openDateModal(dateModalDate, dateModalProjectId);
+    logActivity('added calendar note for ' + dateModalDate, 'calendar', 'info');
+  }
+  function dateCreateJob() { closeM('date-modal'); openJobCardModal(dateModalDate, dateModalProjectId); }
+  function dateCreateProject() { closeM('date-modal'); openProjectModal(); document.getElementById('pj-due').value = dateModalDate; }
+
+  function openJobCardModal(due, projectId) {
+    document.getElementById('jc-title').value = '';
+    document.getElementById('jc-client').innerHTML = '<option value="">Select...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    document.getElementById('jc-service').innerHTML = DB.services.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+    document.getElementById('jc-assignee').innerHTML = '<option value="">Unassigned</option>' + DB.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    document.getElementById('jc-due').value = due || new Date().toISOString().slice(0, 10);
+    document.getElementById('jc-hours').value = 1;
+    document.getElementById('pjob-modal').dataset.project = projectId || '';
+    document.getElementById('pjob-modal').classList.add('active');
+  }
+  function saveJobCard() {
+    const title = document.getElementById('jc-title').value.trim();
+    if (!title) { alert('Job title required'); return; }
+    DB.jobCards.push({ id: nextId('JC', 'jobCards'), title, clientId: document.getElementById('jc-client').value || null, projectId: document.getElementById('pjob-modal').dataset.project || null, assigneeId: document.getElementById('jc-assignee').value || null, service: document.getElementById('jc-service').value, priority: 'medium', status: 'pending', dueDate: document.getElementById('jc-due').value, hours: parseFloat(document.getElementById('jc-hours').value) || 1 });
+    saveDB(); closeM('pjob-modal'); renderProjects(); renderBigCalendar(); if (currentDetail) renderProjectCalendar();
+    logActivity(`issued job card ${title}`, 'clipboard', 'success');
+  }
+
+  function openDetail(id) {
+    currentDetail = id; const p = getProject(id); if (!p) return;
+    const cl = getClient(p.clientId);
+    document.getElementById('dt-title').textContent = p.name;
+    document.getElementById('dt-info').innerHTML = `<span class="badge badge-info">${p.code}</span> ${p.service ? `<span class="badge badge-neutral">${p.service}</span>` : ''}<div style="margin-top:8px;color:var(--text-secondary);font-size:.9rem;">Client: <strong style="color:var(--text-primary);">${cl ? cl.name : '—'}</strong> · Budget: <strong>${fmtZAR(p.budget)}</strong> · Due: <strong>${fmtDate(p.dueDate)}</strong></div>`;
+    document.getElementById('dt-progress').value = p.progress; document.getElementById('dt-prog-val').textContent = p.progress + '%';
+    projCalDate = new Date();
+    renderGoogleCard(); renderFolders(id); renderThread(id); renderProjectCalendar();
+    const jobs = DB.jobCards.filter(j => j.projectId === id);
+    document.getElementById('dt-jobs').innerHTML = jobs.length ? jobs.map(j => `<div class="att-chip">${j.title} <span class="badge badge-${j.status === 'completed' ? 'success' : j.status === 'in_progress' ? 'warning' : 'neutral'}">${j.status.replace('_', ' ')}</span>${j.lockedBy ? ' · 🔒 ' + (getStaff(j.lockedBy) ? getStaff(j.lockedBy).name : '') : ''}</div>`).join('') : '<small style="color:var(--text-muted);">No job cards yet.</small>';
+    document.getElementById('detail-modal').classList.add('active');
+    feather.replace();
+    initMovable('#detail-modal', 'detail'); applySecOrder('#detail-modal', 'detail');
+  }
+  function updateProgress(v) { const p = getProject(currentDetail); if (!p) return; p.progress = parseInt(v); if (p.progress >= 100) p.status = 'completed'; saveDB(); document.getElementById('dt-prog-val').textContent = v + '%'; renderProjects(); }
+  function editFromDetail() { closeM('detail-modal'); editProject(currentDetail); }
+  function renderDetail(pid) { renderGoogleCard(); renderFolders(pid); }
+
+  function toggleCustom() { document.getElementById('pj-custom-wrap').style.display = document.getElementById('pj-service').value === 'custom' ? 'block' : 'none'; }
+  function quickAddProjClient() {
+    const name = document.getElementById('pj-nc-name').value.trim(); if (!name) { alert('Client name required'); return; }
+    const c = { id: nextId('CLT', 'clients'), code: generateClientCode(name), name, email: document.getElementById('pj-nc-email').value.trim(), phone: '', address: '', totalSpent: 0, projects: 0, status: 'active' };
+    DB.clients.push(c); saveDB();
+    document.getElementById('pj-client').innerHTML = '<option value="">Select...</option>' + DB.clients.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+    document.getElementById('pj-client').value = c.id;
+    document.getElementById('pj-nc-name').value = ''; document.getElementById('pj-nc-email').value = '';
+  }
+  function openProjectModal() {
+    document.getElementById('pj-id').value = ''; document.getElementById('pj-modal-title').textContent = 'New Project';
+    ['pj-name','pj-budget','pj-desc','pj-custom','pj-nc-name','pj-nc-email'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('pj-client').innerHTML = '<option value="">Select...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    document.getElementById('pj-service').innerHTML = DB.services.map(s => `<option value="${s.name}">${s.name} — ${fmtZAR(s.price)}</option>`).join('') + '<option value="custom">Custom...</option>';
+    document.getElementById('pj-team').innerHTML = DB.staff.map(s => `<label style="display:flex;gap:6px;align-items:center;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.85rem;"><input type="checkbox" value="${s.id}" style="accent-color:var(--primary);"> ${s.name}</label>`).join('');
+    document.getElementById('pj-custom-wrap').style.display = 'none';
+    if (!document.getElementById('pj-due').value) { const d = new Date(); d.setDate(d.getDate() + 30); document.getElementById('pj-due').value = d.toISOString().slice(0, 10); }
+    document.getElementById('project-modal').classList.add('active');
+  }
+  function editProject(id) { const p = getProject(id); if (!p) return; openProjectModal(); document.getElementById('pj-id').value = p.id; document.getElementById('pj-modal-title').textContent = 'Edit Project'; document.getElementById('pj-name').value = p.name; document.getElementById('pj-client').value = p.clientId; const sel = document.getElementById('pj-service'); if ([...sel.options].some(o => o.value === p.service)) sel.value = p.service; else { sel.value = 'custom'; document.getElementById('pj-custom').value = p.service || ''; document.getElementById('pj-custom-wrap').style.display = 'block'; } document.getElementById('pj-budget').value = p.budget; document.getElementById('pj-due').value = p.dueDate; document.getElementById('pj-priority').value = p.priority; document.getElementById('pj-status').value = p.status; document.getElementById('pj-desc').value = p.description || ''; document.querySelectorAll('#pj-team input').forEach(cb => cb.checked = (p.assignees || []).includes(cb.value)); }
+  async function saveProject() {
+    const name = document.getElementById('pj-name').value.trim(); const clientId = document.getElementById('pj-client').value;
+    if (!name || !clientId) { alert('Name and client required'); return; }
+    const sel = document.getElementById('pj-service').value;
+    const data = { name, clientId: Number(clientId), service: sel === 'custom' ? document.getElementById('pj-custom').value.trim() : sel, budget: parseFloat(document.getElementById('pj-budget').value) || 0, dueDate: document.getElementById('pj-due').value, priority: document.getElementById('pj-priority').value, status: document.getElementById('pj-status').value, assignees: JSON.stringify([...document.querySelectorAll('#pj-team input:checked')].map(cb => cb.value)), description: document.getElementById('pj-desc').value };
+    const id = document.getElementById('pj-id').value;
+    try {
+      const response = id ? await ApiService.updateProject(Number(id), data) : await ApiService.createProject(data);
+      const saved = response.data;
+      if (id) DB.projects[DB.projects.findIndex(p => String(p.id) === String(id))] = { ...DB.projects.find(p => String(p.id) === String(id)), ...saved, id: String(saved.id), clientId: String(saved.clientId), assignees: saved.assignees ? JSON.parse(saved.assignees) : [] };
+      else DB.projects.push({ ...saved, id: String(saved.id), clientId: String(saved.clientId), assignees: saved.assignees ? JSON.parse(saved.assignees) : [], folders: [] });
+      closeM('project-modal'); renderProjects(); renderBigCalendar();
+    } catch (error) { alert(error.message || 'Unable to save project.'); }
+  }
+
+  function renderPipeline() {
+    const stages = ['Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'];
+    document.getElementById('pipeline-board').innerHTML = stages.map(stage => { const deals = DB.deals.filter(d => d.stage === stage); const totalVal = deals.reduce((s, d) => s + (d.value || 0), 0); return `<div class="pipeline-col"><h4>${stage} <span style="color:var(--text-muted);font-weight:400;">${fmtZAR(totalVal)}</span></h4>${deals.map(d => `<div class="deal-card" onclick="editDeal('${d.id}')"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><strong>${d.name}</strong><span class="deal-score">${d.score}%</span></div><div style="font-size:.8rem;color:var(--text-muted);margin-bottom:8px;">${getClient(d.clientId) ? getClient(d.clientId).name : 'No Client'}</div><div class="deal-value">${fmtZAR(d.value)}</div></div>`).join('') || '<p style="color:var(--text-muted);font-size:.8rem;text-align:center;">No deals</p>'}</div>`; }).join('');
+  }
+  function openDealModal() { document.getElementById('deal-id').value = ''; document.getElementById('deal-name').value = ''; document.getElementById('deal-client').innerHTML = '<option value="">Select...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); document.getElementById('deal-value').value = ''; document.getElementById('deal-score').value = 50; document.getElementById('deal-stage').value = 'Lead'; document.getElementById('deal-modal').classList.add('active'); }
+  function editDeal(id) { const d = DB.deals.find(x => x.id === id); if (!d) return; openDealModal(); document.getElementById('deal-id').value = d.id; document.getElementById('deal-name').value = d.name; document.getElementById('deal-client').value = d.clientId; document.getElementById('deal-value').value = d.value; document.getElementById('deal-score').value = d.score; document.getElementById('deal-stage').value = d.stage; }
+  function saveDeal() { const id = document.getElementById('deal-id').value; const data = { name: document.getElementById('deal-name').value.trim(), clientId: document.getElementById('deal-client').value, value: parseFloat(document.getElementById('deal-value').value) || 0, score: parseInt(document.getElementById('deal-score').value) || 0, stage: document.getElementById('deal-stage').value }; if (!data.name) { alert('Name required'); return; } if (id) Object.assign(DB.deals.find(d => d.id === id), data); else { data.id = nextId('DEAL', 'deals'); DB.deals.push(data); } saveDB(); closeM('deal-modal'); renderPipeline(); }
+
+  function populate360() { document.getElementById('client-360-select').innerHTML = '<option value="">Select a client...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join(''); document.getElementById('client-360-dashboard').innerHTML = ''; }
+  function render360View() { const cid = document.getElementById('client-360-select').value; const dash = document.getElementById('client-360-dashboard'); if (!cid) { dash.innerHTML = ''; return; } const projects = DB.projects.filter(p => p.clientId === cid); const invoices = (DB.invoices || []).filter(i => i.clientId === cid); const totalBilled = invoices.reduce((s, i) => s + (i.total || 0), 0); const totalPaid = invoices.reduce((s, i) => s + (i.paid || 0), 0); dash.innerHTML = `<div class="stats-grid"><div class="stat-card"><div class="stat-label">Total Billed</div><div class="stat-value">${fmtZAR(totalBilled)}</div></div><div class="stat-card green"><div class="stat-label">Total Paid</div><div class="stat-value">${fmtZAR(totalPaid)}</div></div><div class="stat-card red"><div class="stat-label">Outstanding</div><div class="stat-value">${fmtZAR(totalBilled - totalPaid)}</div></div></div><div class="card"><div class="card-title">All Projects for this Client</div>${projects.map(p => `<div style="padding:10px 0;border-bottom:1px solid var(--border);"><strong>${p.name}</strong> <span class="badge badge-info">${p.status.replace('_',' ')}</span><br><small>${fmtZAR(p.budget)}</small></div>`).join('') || '<p style="color:var(--text-muted);">No projects.</p>'}</div>`; }
+
+  function renderWorkload() {
+    const staffLoad = {}; DB.staff.forEach(s => { staffLoad[s.id] = { name: s.name, hours: 0 }; });
+    (DB.jobCards || []).filter(j => j.status !== 'completed').forEach(j => { if (j.assigneeId && staffLoad[j.assigneeId]) staffLoad[j.assigneeId].hours += (Number(j.hours) || 0); });
+    document.getElementById('workload-list').innerHTML = Object.values(staffLoad).map(s => { const capacity = 160; const pct = Math.min(100, (s.hours / capacity) * 100); const color = pct > 90 ? 'var(--danger)' : pct > 70 ? 'var(--warning)' : 'var(--success)'; return `<div style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;font-size:.85rem;"><strong>${s.name}</strong><span>${s.hours}h / ${capacity}h</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div></div>`; }).join('');
+    document.getElementById('profit-table').innerHTML = DB.projects.map(p => { const inv = (DB.invoices || []).filter(i => i.projectId === p.id).reduce((s, i) => s + (i.total || 0), 0); const exp = (DB.expenses || []).filter(e => e.projectId === p.id && e.status === 'approved').reduce((s, e) => s + (e.amount || 0), 0); const profit = inv - exp; const margin = inv > 0 ? (profit / inv * 100).toFixed(1) : 0; return `<tr><td><strong>${p.name}</strong></td><td>${fmtZAR(p.budget || 0)}</td><td>${fmtZAR(inv)}</td><td style="color:var(--danger);">${fmtZAR(exp)}</td><td style="color:${profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmtZAR(profit)}</td><td>${margin}%</td></tr>`; }).join('');
+  }
+
+  function renderAutomations() { document.getElementById('automations-list').innerHTML = DB.automations.map(a => `<div class="att-chip" style="width:100%;justify-content:space-between;"><span><strong>IF</strong> ${a.trigger} <strong>THEN</strong> ${a.action}</span><button class="btn btn-danger" style="padding:3px 8px;" onclick="deleteAutomation('${a.id}')">✕</button></div>`).join('') || '<p style="color:var(--text-muted);">No automations configured.</p>'; }
+  function openAutomationModal() { document.getElementById('auto-modal').classList.add('active'); }
+  function saveAutomation() { DB.automations.push({ id: nextId('AUTO', 'automations'), trigger: document.getElementById('auto-trigger').value, action: document.getElementById('auto-action').value }); saveDB(); closeM('auto-modal'); renderAutomations(); }
+  function deleteAutomation(id) { if (confirm('Delete?')) { DB.automations = DB.automations.filter(a => a.id !== id); saveDB(); renderAutomations(); } }
+  function checkAutomations(projectId, newStatus) { const key = 'project_' + newStatus; DB.automations.filter(a => a.trigger === key).forEach(rule => logActivity(`Automation triggered: ${rule.action} for project ${projectId}`, 'zap', 'success')); }
+
+  async function loadProjectData() {
+    try {
+      const results = await Promise.allSettled([ApiService.getProjects(), ApiService.getClients(), ApiService.getStaff(), ApiService.getJobCards()]);
+      const data = results.map(result => result.status === 'fulfilled' ? result.value.data || [] : []);
+      DB.projects = data[0].map(p => ({ ...p, id: String(p.id), clientId: String(p.clientId), assignees: p.assignees ? JSON.parse(p.assignees) : [], folders: p.folders || [] }));
+      DB.clients = data[1].map(c => ({ ...c, id: String(c.id) }));
+      DB.staff = data[2].map(s => ({ ...s, id: String(s.id), name: [s.firstName, s.lastName].filter(Boolean).join(' ') }));
+      DB.jobCards = data[3].map(j => ({ ...j, id: String(j.id), clientId: j.clientId && String(j.clientId), projectId: j.projectId && String(j.projectId), assigneeId: j.assigneeId && String(j.assigneeId) }));
+      renderProjects(); renderBigCalendar();
+    } catch (error) { console.error('Unable to load project data:', error); renderProjects(); renderBigCalendar(); }
+  }
+  loadProjectData();
+  initMovable('#ptab-board', 'board'); applySecOrder('#ptab-board', 'board');
+  feather.replace();
+</script>
+</body>
+</html>
