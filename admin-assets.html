@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Assets · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="admin-assets.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar"><div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Assets</h1></div><div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div></header>
+    <div class="page-content">
+      <div class="page-header"><div><h1>Assets & Equipment Booking</h1><p>Depreciation auto-worked · every book-out/book-in logged with the staff member.</p></div><button class="btn btn-primary" onclick="openAssetModal()"><i data-feather="plus"></i> Log Equipment</button></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value" id="st-cost">R 0</div></div>
+        <div class="stat-card green"><div class="stat-label">Book Value</div><div class="stat-value" id="st-book">R 0</div></div>
+        <div class="stat-card blue"><div class="stat-label">Available Now</div><div class="stat-value" id="st-avail">0</div></div>
+        <div class="stat-card red"><div class="stat-label">Booked Out</div><div class="stat-value" id="st-out">0</div></div>
+      </div>
+
+      <div class="card"><div class="card-header"><div class="card-title">📋 Equipment Booking Sheet — book out / book in</div></div>
+        <div class="form-grid" style="margin-bottom:14px;">
+          <div class="form-group"><label>Equipment (available only)</label><select id="bk-asset"></select></div>
+          <div class="form-group"><label>Staff member</label><select id="bk-staff"></select></div>
+          <div class="form-group"><label>Book-out date</label><input type="date" id="bk-out"></div>
+          <div class="form-group"><label>Expected return</label><input type="date" id="bk-due"></div>
+          <div class="form-group"><label>Purpose / job</label><input id="bk-note" placeholder="e.g. Uncle Cal shoot"></div>
+        </div>
+        <button class="btn btn-primary" onclick="bookOut()"><i data-feather="log-out"></i> Book Out Equipment</button>
+      </div>
+
+      <div class="card" style="padding:0;margin-bottom:20px;">
+        <table class="data-table">
+          <thead><tr><th>Asset</th><th>Staff</th><th>Booked Out</th><th>Due Back</th><th>Returned</th><th>Status</th><th></th></tr></thead>
+          <tbody id="bookings-table"></tbody>
+        </table>
+      </div>
+
+      <div class="card" style="padding:0;">
+        <table class="data-table">
+          <thead><tr><th>Asset</th><th>Category</th><th>Cost</th><th>Annual Dep.</th><th>Book Value</th><th>Dep %</th><th>Availability</th><th></th></tr></thead>
+          <tbody id="assets-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="asset-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="asset-modal-title">Log Equipment</div><button class="modal-close" onclick="closeAssetModal()">✕</button></div>
+  <div class="modal-body"><input type="hidden" id="asset-id"><div class="form-grid">
+    <div class="form-group"><label>Name</label><input id="asset-name"></div>
+    <div class="form-group"><label>Category</label><select id="asset-category" onchange="autoLife()"><option>Computer Equipment</option><option>Camera / Video</option><option>Audio</option><option>Furniture</option><option>Vehicle</option><option>Other</option></select></div>
+    <div class="form-group"><label>Purchase Date</label><input type="date" id="asset-date"></div>
+    <div class="form-group"><label>Cost</label><input type="number" id="asset-cost" oninput="previewDep()"></div>
+    <div class="form-group"><label>Salvage</label><input type="number" id="asset-salvage" value="0" oninput="previewDep()"></div>
+    <div class="form-group"><label>Life (yrs)</label><input type="number" id="asset-life" value="3" oninput="previewDep()"></div>
+  </div><div id="dep-preview" style="background:var(--bg-input);border:1px dashed var(--primary);border-radius:8px;padding:12px;font-size:.9rem;line-height:1.8;"></div></div>
+  <div class="modal-footer"><button class="btn btn-primary" onclick="saveAsset()">Save</button></div></div></div>
+
+<script src="centoroapi.js"></script>
+<script src="admin-assets.js"></script>
+<script>
+  initApp('admin-assets.html', 'Assets');
+  if (!DB.bookings) DB.bookings = [];
+  const LIFE = { 'Computer Equipment': 3, 'Camera / Video': 5, 'Audio': 5, 'Furniture': 7, 'Vehicle': 5, 'Other': 5 };
+  function autoLife() { document.getElementById('asset-life').value = LIFE[document.getElementById('asset-category').value] || 5; previewDep(); }
+  function previewDep() { const d = calcDepreciation(parseFloat(document.getElementById('asset-cost').value) || 0, parseFloat(document.getElementById('asset-salvage').value) || 0, parseFloat(document.getElementById('asset-life').value) || 1, document.getElementById('asset-date').value || new Date().toISOString().slice(0, 10)); document.getElementById('dep-preview').innerHTML = `Annual: <strong>${fmtZAR(d.annual)}</strong> · Monthly: <strong>${fmtZAR(d.monthly)}</strong><br>Accumulated: <strong>${fmtZAR(d.accumulated)}</strong> (${d.pct}%) · Book value: <strong style="color:var(--success);">${fmtZAR(d.book)}</strong>`; }
+
+  function renderAll() {
+    let tc = 0, tb = 0;
+    document.getElementById('assets-table').innerHTML = DB.assets.map(a => { const d = calcDepreciation(a.cost, a.salvage || 0, a.lifeYears || 3, a.purchaseDate); tc += a.cost; tb += d.book;
+      const openB = DB.bookings.find(b => b.assetId === a.id && !b.returnedDate);
+      const avail = openB ? `<span class="badge badge-danger">BOOKED OUT → ${getStaff(openB.staffId) ? getStaff(openB.staffId).name : ''}</span>` : (a.status === 'depreciated' ? '<span class="badge badge-neutral">Depreciated</span>' : '<span class="badge badge-success">Available</span>');
+      return `<tr><td><strong>${a.name}</strong></td><td><span class="badge badge-info">${a.category || 'Other'}</span></td><td>${fmtZAR(a.cost)}</td><td>${fmtZAR(d.annual)}</td><td><strong style="color:var(--success);">${fmtZAR(d.book)}</strong></td><td><span class="badge badge-${d.pct >= 70 ? 'danger' : d.pct >= 40 ? 'warning' : 'success'}">${d.pct}%</span></td><td>${avail}</td><td><button class="btn btn-secondary" onclick="editAsset('${a.id}')">Edit</button> <button class="btn btn-danger" onclick="deleteAssetApi('${a.id}')">✕</button></td></tr>`; }).join('');
+    document.getElementById('st-cost').textContent = fmtZAR(tc);
+    document.getElementById('st-book').textContent = fmtZAR(tb);
+    document.getElementById('st-avail').textContent = DB.assets.filter(a => !DB.bookings.some(b => b.assetId === a.id && !b.returnedDate)).length;
+    document.getElementById('st-out').textContent = DB.bookings.filter(b => !b.returnedDate).length;
+    document.getElementById('bk-asset').innerHTML = DB.assets.filter(a => !DB.bookings.some(b => b.assetId === a.id && !b.returnedDate)).map(a => `<option value="${a.id}">${a.name}</option>`).join('') || '<option value="">No equipment available</option>';
+    document.getElementById('bk-staff').innerHTML = DB.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('bookings-table').innerHTML = DB.bookings.slice().reverse().map(b => { const a = DB.assets.find(x => x.id === b.assetId); const s = getStaff(b.staffId); const overdue = !b.returnedDate && b.dueBack && b.dueBack < today;
+      return `<tr><td><strong>${a ? a.name : '—'}</strong></td><td>${s ? s.name : '—'}</td><td>${fmtDate(b.outDate)}</td><td>${fmtDate(b.dueBack)}</td><td>${b.returnedDate ? fmtDate(b.returnedDate) : '—'}</td>
+      <td>${b.returnedDate ? '<span class="badge badge-success">RETURNED</span>' : overdue ? '<span class="badge badge-danger">OVERDUE</span>' : '<span class="badge badge-warning">OUT</span>'}</td>
+      <td>${!b.returnedDate ? `<button class="btn btn-success" onclick="markReturned('${b.id}')">Mark Returned</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">No bookings yet.</td></tr>';
+  }
+
+  function bookOut() {
+    const assetId = document.getElementById('bk-asset').value; const staffId = document.getElementById('bk-staff').value;
+    if (!assetId) { alert('All equipment is currently booked out or none exists.'); return; }
+    DB.bookings.push({ id: nextId('BKG', 'bookings'), assetId, staffId, outDate: document.getElementById('bk-out').value || new Date().toISOString().slice(0, 10), dueBack: document.getElementById('bk-due').value || '', note: document.getElementById('bk-note').value, returnedDate: null, bookedBy: getCurrentUser().name || 'Admin' });
+    const a = DB.assets.find(x => x.id === assetId); if (a) a.status = 'booked';
+    saveDB(); renderAll(); logActivity(`booked out ${a ? a.name : 'equipment'} to ${getStaff(staffId) ? getStaff(staffId).name : ''}`, 'package', 'warning');
+  }
+  function markReturned(id) { const b = DB.bookings.find(x => x.id === id); if (!b) return; b.returnedDate = new Date().toISOString().slice(0, 10); const a = DB.assets.find(x => x.id === b.assetId); if (a) a.status = 'active'; saveDB(); renderAll(); logActivity(`equipment returned: ${a ? a.name : ''}`, 'package', 'success'); }
+
+  function openAssetModal() { document.getElementById('asset-id').value = ''; ['asset-name','asset-cost'].forEach(i => document.getElementById(i).value = ''); document.getElementById('asset-salvage').value = 0; document.getElementById('asset-date').valueAsDate = new Date(); autoLife(); document.getElementById('asset-modal-title').textContent = 'Log Equipment'; document.getElementById('asset-modal').classList.add('active'); }
+  function closeAssetModal() { document.getElementById('asset-modal').classList.remove('active'); }
+  function editAsset(id) { const a = DB.assets.find(x => x.id === id); if (!a) return; document.getElementById('asset-id').value = a.id; document.getElementById('asset-name').value = a.name; document.getElementById('asset-category').value = a.category || 'Other'; document.getElementById('asset-date').value = a.purchaseDate; document.getElementById('asset-cost').value = a.cost; document.getElementById('asset-salvage').value = a.salvage || 0; document.getElementById('asset-life').value = a.lifeYears || 3; previewDep(); document.getElementById('asset-modal-title').textContent = 'Edit Asset'; document.getElementById('asset-modal').classList.add('active'); }
+  async function saveAsset() { const name = document.getElementById('asset-name').value.trim(); const cost = parseFloat(document.getElementById('asset-cost').value); if (!name || !cost) { alert('Name and cost required'); return; } const data = { name, category: document.getElementById('asset-category').value, purchaseDate: document.getElementById('asset-date').value, cost, salvage: parseFloat(document.getElementById('asset-salvage').value) || 0, lifeYears: parseFloat(document.getElementById('asset-life').value) || 3, status: 'active' }; const id = document.getElementById('asset-id').value; try { const response = id ? await ApiService.updateAsset(Number(id), data) : await ApiService.createAsset(data); const saved = response.data; if (id) DB.assets[DB.assets.findIndex(a => String(a.id) === String(id))] = { ...saved, id: String(saved.id) }; else DB.assets.push({ ...saved, id: String(saved.id) }); closeAssetModal(); renderAll(); } catch (error) { alert(error.message || 'Unable to save asset.'); } }
+
+  async function deleteAssetApi(id) { if (!confirm('Delete this asset?')) return; try { await ApiService.deleteAsset(Number(id)); DB.assets = DB.assets.filter(a => String(a.id) !== String(id)); renderAll(); } catch (error) { alert(error.message || 'Unable to delete asset.'); } }
+
+  async function loadAssetData() { try { const [assets, staff] = await Promise.all([ApiService.getAssets(), ApiService.getStaff()]); DB.assets = (assets.data || []).map(a => ({ ...a, id: String(a.id) })); DB.staff = (staff.data || []).map(s => ({ ...s, id: String(s.id), name: [s.firstName, s.lastName].filter(Boolean).join(' ') })); renderAll(); } catch (error) { console.error('Unable to load asset data:', error); renderAll(); } }
+
+  document.getElementById('bk-out').valueAsDate = new Date();
+  loadAssetData(); feather.replace();
+</script>
+</body>
+</html>
