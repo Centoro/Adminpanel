@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vouchers · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="admin-vouchers.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  .voucher-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+  .voucher-code { font-family: 'Courier New', monospace; font-size: 1.2rem; font-weight: 700; color: var(--primary); background: var(--bg-elevated); padding: 8px 14px; border-radius: 8px; border: 1px dashed var(--primary); }
+  #ticket-canvas { width: 100%; border-radius: 10px; border: 1px solid var(--border); background: #111; }
+
+  .service-chip {
+    display: inline-block;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: .8rem;
+    margin: 0 6px 6px 0;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .service-chip.active {
+    background: var(--primary);
+    color: #0f172a;
+    border-color: var(--primary);
+    font-weight: 700;
+  }
+
+  .collapse-indicator {
+    font-size: .8rem;
+    color: var(--text-muted);
+  }
+
+  .issue-panel { display: none; }
+  .issue-info-box {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: .85rem;
+    line-height: 1.7;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Vouchers</h1></div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button>
+        <div class="user-avatar" id="topbar-avatar">CJ</div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Discount Vouchers</h1><p>Issue → upload your design → download PNG with QR → start/expiry dates control it.</p></div>
+        <button class="btn btn-primary" onclick="openVoucherModal()"><i data-feather="plus"></i> Issue Voucher</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card" style="cursor:pointer;" onclick="applyStatFilter('active')"><div class="stat-label">Active</div><div class="stat-value" id="st-active">0</div></div>
+        <div class="stat-card green" style="cursor:pointer;" onclick="applyStatFilter('used')"><div class="stat-label">Times Used</div><div class="stat-value" id="st-used">0</div></div>
+        <div class="stat-card red" style="cursor:pointer;" onclick="applyStatFilter('expired')"><div class="stat-label">Expired / Locked</div><div class="stat-value" id="st-exp">0</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('voucher-filter-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Search, Filter & Sort <span class="collapse-indicator">▾</span>
+          </div>
+          <button class="btn btn-secondary" onclick="event.stopPropagation(); clearVoucherFilters()">Clear Filters</button>
+        </div>
+
+        <div id="voucher-filter-body">
+          <div class="form-grid">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Search</label>
+              <input type="text" id="voucher-search" placeholder="Search code, client, recipient, category, purpose..." oninput="renderVouchers()">
+            </div>
+
+            <div class="form-group">
+              <label>Voucher Code</label>
+              <input type="text" id="filter-code" placeholder="e.g. CENTORO-ABC123" oninput="renderVouchers()">
+            </div>
+
+            <div class="form-group">
+              <label>Status</label>
+              <select id="filter-status" onchange="renderVouchers()">
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="used">Used At Least Once</option>
+                <option value="expired">Expired / Locked</option>
+                <option value="public">Public</option>
+                <option value="specific">Issued To Client</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Category / Service</label>
+              <select id="filter-category" onchange="renderVouchers()"></select>
+            </div>
+
+            <div class="form-group">
+              <label>Type</label>
+              <select id="filter-type" onchange="renderVouchers()"></select>
+            </div>
+
+            <div class="form-group">
+              <label>Issued To Client</label>
+              <select id="filter-client" onchange="renderVouchers()"></select>
+            </div>
+
+            <div class="form-group">
+              <label>Purpose</label>
+              <select id="filter-purpose" onchange="renderVouchers()">
+                <option value="">All Purposes</option>
+                <option value="standard">Standard</option>
+                <option value="gift">Gift Purchase</option>
+                <option value="giveaway">Giveaway</option>
+                <option value="promotion">Promotion</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Sort By</label>
+              <select id="voucher-sort" onchange="renderVouchers()">
+                <option value="issued-desc" selected>Issued (newest first)</option>
+                <option value="expiry-asc">Expiry (earliest first)</option>
+                <option value="expiry-desc">Expiry (latest first)</option>
+                <option value="value-desc">Value (high to low)</option>
+                <option value="used-desc">Times Used (high to low)</option>
+                <option value="code-asc">Code (A-Z)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('voucher-service-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Services — click a service to organise vouchers <span class="collapse-indicator">▾</span>
+          </div>
+        </div>
+
+        <div id="voucher-service-body">
+          <div id="service-chips"></div>
+        </div>
+      </div>
+
+      <div id="vouchers-list"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="voucher-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="voucher-modal-title">Issue Voucher</div>
+      <button class="modal-close" onclick="closeM('voucher-modal')">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <input type="hidden" id="v-id">
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>System Voucher Code</label>
+          <input id="v-code" readonly style="text-transform:uppercase;">
+        </div>
+
+        <div class="form-group" id="promo-code-group">
+          <label>Company / Personal Voucher Code (optional)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="v-promo-code" style="text-transform:uppercase; flex:1;">
+            <button type="button" class="btn btn-secondary" id="promo-generate-btn" onclick="generatePromoCode()">↻ Generate</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Type</label>
+          <select id="v-type"></select>
+        </div>
+
+        <div class="form-group">
+          <label>Value</label>
+          <input type="number" id="v-value" step="0.01" min="0">
+        </div>
+
+        <div class="form-group">
+          <label>Category / Service</label>
+          <select id="v-category"></select>
+        </div>
+
+        <div class="form-group">
+          <label>Max Uses / Total People</label>
+          <input type="number" id="v-max" value="10" min="1">
+        </div>
+
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" id="v-start">
+        </div>
+
+        <div class="form-group">
+          <label>Expiry Date</label>
+          <input type="date" id="v-expiry">
+        </div>
+
+        <div class="form-group">
+          <label>Purpose</label>
+          <select id="v-purpose">
+            <option value="standard">Standard</option>
+            <option value="gift">Gift Purchase</option>
+            <option value="giveaway">Giveaway</option>
+            <option value="promotion">Promotion</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Issue To</label>
+        <select id="v-issue" onchange="updateIssueToLayout()"></select>
+      </div>
+
+      <div id="issue-public-panel" class="issue-panel">
+        <div class="issue-info-box">
+          Public voucher — no names are required.
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Country / Region (optional)</label>
+            <input type="text" id="v-country" placeholder="e.g. South Africa, International, Namibia">
+          </div>
+
+          <div class="form-group">
+            <label>Custom Recipient Label (optional)</label>
+            <input type="text" id="v-recipient-label" placeholder="e.g. Event attendees, Promo winner, Radio campaign">
+          </div>
+        </div>
+      </div>
+
+      <div id="issue-client-panel" class="issue-panel">
+        <div id="issue-client-info"></div>
+      </div>
+
+      <div id="issue-other-panel" class="issue-panel">
+        <div class="issue-info-box">
+          Use this for a person, company or small business that is not on the client list.
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group" style="margin:0;">
+            <label>Recipient First Name</label>
+            <input type="text" id="other-first-name">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Recipient Surname</label>
+            <input type="text" id="other-surname">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Recipient Initials</label>
+            <input type="text" id="other-initials">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Recipient Phone</label>
+            <input type="text" id="other-phone">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Recipient Email</label>
+            <input type="email" id="other-email">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Recipient Address (optional)</label>
+            <input type="text" id="other-address">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Company / Business Name (optional)</label>
+            <input type="text" id="other-company" placeholder="e.g. Cape Town Coffee Co.">
+          </div>
+
+          <div class="form-group" style="margin:0;">
+            <label>Company CK Number (optional)</label>
+            <input type="text" id="other-company-ck" placeholder="e.g. 2020/123456/07">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:14px;">
+        <label>Upload My Own Design (optional — becomes the ticket background). Recommended size: 1000 × 420 px.</label>
+        <input type="file" id="v-image" accept="image/*">
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('voucher-modal')">Cancel</button>
+      <button class="btn btn-primary" id="voucher-save-btn" onclick="saveVoucher()">Issue Voucher</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ticket-modal">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <div class="modal-title">🎟️ Ticket Designer</div>
+      <button class="modal-close" onclick="closeM('ticket-modal')">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+        <label style="font-size:.85rem;color:var(--text-secondary);">Bg</label><input type="color" id="tk-bg" value="#1a1a1a" onchange="drawTicket()">
+        <label style="font-size:.85rem;color:var(--text-secondary);">Accent</label><input type="color" id="tk-accent" value="#FFC107" onchange="drawTicket()">
+        <label class="btn btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+          <i data-feather="upload" style="width:14px;height:14px;"></i>
+          <span>UPLOAD MY OWN DESIGN</span>
+          <input type="file" id="tk-custom" accept="image/*" style="display:none;" onchange="uploadCustomBg(event)">
+        </label>
+        <button class="btn btn-secondary" onclick="removeCustomBg()">Default Design</button>
+      </div>
+
+      <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:8px;">Recommended design size: 1000 × 420 px.</div>
+      <div id="tk-status" style="font-size:.85rem;color:var(--text-muted);margin-bottom:8px;"></div>
+      <canvas id="ticket-canvas" width="1000" height="420"></canvas>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="window.print()">Print</button>
+      <button class="btn btn-primary" onclick="downloadTicket()"><i data-feather="download"></i> Download PNG (with QR)</button>
+    </div>
+  </div>
+</div>
+
+<script src="centoroapi.js"></script>
+<script src="admin-vouchers.js"></script>
+<script>
+  initApp('admin-vouchers.html', 'Vouchers');
+
+  if (!DB.vouchers) DB.vouchers = [];
+  if (!DB.clients) DB.clients = [];
+  if (!DB.currencies) DB.currencies = [];
+  if (!DB.services) DB.services = [];
+
+  const DEFAULT_VOUCHER_SERVICES = [
+    'Graphic Design',
+    'Graphic Design (Branding, Posters, Flyers)',
+    'Graphic Design (Hourly)',
+    'Logo Design',
+    'Flyer / Poster',
+    'Business Card',
+    'Social Media Post',
+    'Web & App Development',
+    'Website (1-3 pages)',
+    'Business Website (5 pages)',
+    'E-Commerce Website',
+    'Web Development (Hourly)',
+    'Videography & Photography',
+    'Video Editing & Photography',
+    'Video Edit (1-3min)',
+    'Promo / Advert',
+    'Video Editing (Hourly)',
+    'Basic Photoshoot (1hr)',
+    'Matric Ball Photography',
+    'Wedding Photography (Standard Half)',
+    'Wedding Photography (Premium Half)',
+    'Wedding Photography (Premium Full)',
+    'Corporate Events',
+    'Music Production & Mixing',
+    'Studio Recording',
+    'Beat Lease',
+    'Beat Exclusive',
+    'Mixing & Mastering',
+    'Marketing & Promotions',
+    'Event Coverage',
+    'Technical Support',
+    'Consultation (45min)',
+    'Call-Out (Local)',
+    'Starter Package',
+    'Business Package',
+    'Premium Package'
+  ];
+
+  function closeM(id) {
+    document.getElementById(id).classList.remove('active');
+  }
+
+  function toggleCard(bodyId, header) {
+    const body = document.getElementById(bodyId);
+    const indicator = header.querySelector('.collapse-indicator');
+
+    if (body.style.display === 'none') {
+      body.style.display = 'block';
+      if (indicator) indicator.textContent = '▾';
+    } else {
+      body.style.display = 'none';
+      if (indicator) indicator.textContent = '▸';
+    }
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/"/g, '&quot;');
+  }
+
+  function getCurrency(code) {
+    const dbCurrency = (DB.currencies || []).find(c => c.code === code);
+
+    if (dbCurrency) {
+      return {
+        code: dbCurrency.code,
+        symbol: dbCurrency.symbol || dbCurrency.code,
+        name: dbCurrency.name || dbCurrency.code
+      };
+    }
+
+    return {
+      code: code || 'ZAR',
+      symbol: code || 'R',
+      name: code || 'South African Rand'
+    };
+  }
+
+  function getAllCurrencies() {
+    const map = new Map();
+
+    (DB.currencies || []).forEach(c => {
+      map.set(c.code, {
+        code: c.code,
+        name: c.name || c.code,
+        symbol: c.symbol || c.code
+      });
+    });
+
+    if (!map.has('ZAR')) {
+      map.set('ZAR', { code: 'ZAR', name: 'South African Rand', symbol: 'R' });
+    }
+
+    return [...map.values()].sort((a, b) => a.code.localeCompare(b.code));
+  }
+
+  function populateVoucherTypes() {
+    const sel = document.getElementById('v-type');
+    const current = sel.value;
+
+    let html = '<option value="percent">% Discount</option>';
+
+    getAllCurrencies().forEach(c => {
+      html += `<option value="${c.code}">${c.code} — ${c.name}</option>`;
+    });
+
+    sel.innerHTML = html;
+
+    if (current) sel.value = current;
+  }
+
+  function getServiceList() {
+    const set = new Set(DEFAULT_VOUCHER_SERVICES);
+
+    (DB.services || []).forEach(s => {
+      if (s.name) set.add(s.name);
+    });
+
+    if (DB.website && Array.isArray(DB.website.priceList)) {
+      DB.website.priceList.forEach(p => {
+        if (p.service) set.add(p.service);
+      });
+    }
+
+    DB.vouchers.forEach(v => {
+      if (v.category) set.add(v.category);
+    });
+
+    return [...set].filter(s => s && s !== 'All Services').sort((a, b) => a.localeCompare(b));
+  }
+
+  function populateVoucherCategories() {
+    const sel = document.getElementById('v-category');
+    const current = sel.value;
+    const services = getServiceList();
+
+    sel.innerHTML = '<option value="All Services">All Services</option>' + services.map(s => `<option value="${esc(s)}">${s}</option>`).join('');
+
+    if (current) sel.value = current;
+  }
+
+  function populateIssueSelect(selected = '') {
+    const sel = document.getElementById('v-issue');
+    const clients = [...DB.clients].sort((a, b) => a.name.localeCompare(b.name));
+
+    sel.innerHTML = `
+      <option value="">Public</option>
+      <optgroup label="Clients">
+        ${clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+      </optgroup>
+      <option value="__other__">Other</option>
+    `;
+
+    if (selected && [...sel.options].some(o => o.value === selected)) {
+      sel.value = selected;
+    } else {
+      sel.value = '';
+    }
+  }
+
+  function populateVoucherFilters() {
+    const categorySel = document.getElementById('filter-category');
+    const typeSel = document.getElementById('filter-type');
+    const clientSel = document.getElementById('filter-client');
+    const purposeSel = document.getElementById('filter-purpose');
+
+    const currentCategory = categorySel.value;
+    const currentType = typeSel.value;
+    const currentClient = clientSel.value;
+    const currentPurpose = purposeSel.value;
+
+    const services = getServiceList();
+    const clients = [...DB.clients].sort((a, b) => a.name.localeCompare(b.name));
+
+    categorySel.innerHTML = '<option value="">All Categories</option>' + services.map(s => `<option value="${esc(s)}">${s}</option>`).join('');
+
+    let typeHtml = '<option value="">All Types</option><option value="percent">% Discount</option>';
+
+    getAllCurrencies().forEach(c => {
+      typeHtml += `<option value="${c.code}">${c.code} — ${c.name}</option>`;
+    });
+
+    typeSel.innerHTML = typeHtml;
+    clientSel.innerHTML = '<option value="">All Clients</option>' + clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    if (currentCategory) categorySel.value = currentCategory;
+    if (currentType) typeSel.value = currentType;
+    if (currentClient) clientSel.value = currentClient;
+    if (currentPurpose) purposeSel.value = currentPurpose;
+  }
+
+  function clearVoucherFilters() {
+    document.getElementById('voucher-search').value = '';
+    document.getElementById('filter-code').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-category').value = '';
+    document.getElementById('filter-type').value = '';
+    document.getElementById('filter-client').value = '';
+    document.getElementById('filter-purpose').value = '';
+    document.getElementById('voucher-sort').value = 'issued-desc';
+    renderVouchers();
+  }
+
+  function applyStatFilter(mode) {
+    if (mode === 'active') {
+      document.getElementById('filter-status').value = 'active';
+    }
+
+    if (mode === 'expired') {
+      document.getElementById('filter-status').value = 'expired';
+    }
+
+    if (mode === 'used') {
+      document.getElementById('filter-status').value = 'used';
+      document.getElementById('voucher-sort').value = 'used-desc';
+    }
+
+    renderVouchers();
+  }
+
+  function renderServiceChips() {
+    const current = document.getElementById('filter-category').value;
+    const services = getServiceList();
+    const counts = {};
+
+    DB.vouchers.forEach(v => {
+      if (v.category) counts[v.category] = (counts[v.category] || 0) + 1;
+    });
+
+    let html = `<span class="service-chip ${current === '' ? 'active' : ''}" onclick="setServiceFilter('')">All</span>`;
+
+    services.forEach(s => {
+      html += `<span class="service-chip ${current === s ? 'active' : ''}" data-service="${esc(s)}" onclick="setServiceFilter(this.getAttribute('data-service'))">${s} (${counts[s] || 0})</span>`;
+    });
+
+    document.getElementById('service-chips').innerHTML = html;
+  }
+
+  function setServiceFilter(value) {
+    document.getElementById('filter-category').value = value;
+    renderVouchers();
+  }
+
+  function getFilteredVouchers() {
+    const rawSearch = document.getElementById('voucher-search').value || '';
+    const q = rawSearch.toLowerCase().replace(/#/g, '').trim();
+    const qCompact = q.replace(/\s+/g, '');
+
+    const rawCodeFilter = document.getElementById('filter-code').value || '';
+    const codeFilter = rawCodeFilter.toLowerCase().replace(/#/g, '').trim().replace(/\s+/g, '');
+
+    const status = document.getElementById('filter-status').value;
+    const category = document.getElementById('filter-category').value;
+    const type = document.getElementById('filter-type').value;
+    const client = document.getElementById('filter-client').value;
+    const purpose = document.getElementById('filter-purpose').value;
+
+    let list = DB.vouchers.filter(v => {
+      const c = getClient(v.clientId);
+
+      const otherName = [v.otherFirstName, v.otherSurname].filter(Boolean).join(' ');
+
+      const searchParts = [
+        v.code,
+        v.promoCode,
+        v.category,
+        v.type,
+        v.purpose,
+        v.recipientCountry,
+        v.recipientLabel,
+        otherName,
+        v.company,
+        c ? c.name : '',
+        v.issuedBy,
+        v.updatedBy
+      ].join(' ').toLowerCase();
+
+      const searchCompact = searchParts.replace(/\s+/g, '');
+
+      if (q && !searchParts.includes(q) && !searchCompact.includes(qCompact)) return false;
+
+      if (codeFilter) {
+        const systemCode = (v.code || '').toLowerCase().replace(/\s+/g, '');
+        const promoCode = (v.promoCode || '').toLowerCase().replace(/\s+/g, '');
+
+        if (!systemCode.includes(codeFilter) && !promoCode.includes(codeFilter)) return false;
+      }
+
+      const st = voucherStatus(v);
+
+      if (status === 'active' && st !== 'active') return false;
+      if (status === 'expired' && st === 'active') return false;
+      if (status === 'used' && !(Number(v.usedCount) > 0)) return false;
+      if (status === 'public' && v.clientId) return false;
+      if (status === 'specific' && !v.clientId) return false;
+
+      if (category && v.category !== category) return false;
+
+      if (type) {
+        const vType = v.type === 'fixed' ? 'ZAR' : v.type;
+        if (type === 'percent' && vType !== 'percent') return false;
+        if (type !== 'percent' && vType !== type) return false;
+      }
+
+      if (client && v.clientId !== client) return false;
+      if (purpose && v.purpose !== purpose) return false;
+
+      return true;
+    });
+
+    const sort = document.getElementById('voucher-sort').value;
+
+    list.sort((a, b) => {
+      if (sort === 'expiry-asc') return (a.expiryDate || '').localeCompare(b.expiryDate || '');
+      if (sort === 'expiry-desc') return (b.expiryDate || '').localeCompare(a.expiryDate || '');
+      if (sort === 'value-desc') return Number(b.value || 0) - Number(a.value || 0);
+      if (sort === 'used-desc') return Number(b.usedCount || 0) - Number(a.usedCount || 0);
+      if (sort === 'code-asc') return (getActiveCode(a) || '').localeCompare(getActiveCode(b) || '');
+      return (b.issuedDate || b.issuedAt || '').localeCompare(a.issuedDate || a.issuedAt || '');
+    });
+
+    return list;
+  }
+
+  function getActiveCode(v) {
+    return v.promoCode || v.code;
+  }
+
+  function currencyAmountLabel(v) {
+    const cur = getCurrency(v.type === 'fixed' ? 'ZAR' : v.type);
+    return `${cur.symbol || cur.code || ''} ${Number(v.value || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
+  }
+
+  function voucherValueLabel(v) {
+    return v.type === 'percent' ? `${Number(v.value || 0)}% OFF` : `${currencyAmountLabel(v)} OFF`;
+  }
+
+  function voucherRecipientDisplay(v) {
+    const c = getClient(v.clientId);
+
+    if (c) return c.name;
+
+    if (v.company) return v.company;
+
+    const other = [v.otherFirstName, v.otherSurname].filter(Boolean).join(' ').trim();
+    if (other) return other;
+
+    if (v.recipientLabel) return v.recipientLabel;
+    if (v.recipientCountry) return v.recipientCountry;
+
+    return 'Public';
+  }
+
+  function renderVouchers() {
+    populateVoucherFilters();
+
+    const active = DB.vouchers.filter(v => voucherStatus(v) === 'active').length;
+    const usedTotal = DB.vouchers.reduce((s, v) => s + Number(v.usedCount || 0), 0);
+    const expired = DB.vouchers.filter(v => voucherStatus(v) !== 'active').length;
+
+    document.getElementById('st-active').textContent = active;
+    document.getElementById('st-used').textContent = usedTotal;
+    document.getElementById('st-exp').textContent = expired;
+
+    const list = getFilteredVouchers();
+
+    document.getElementById('vouchers-list').innerHTML = list.map(v => {
+      const st = voucherStatus(v);
+
+      return `<div class="voucher-card">
+        <div class="voucher-code">${getActiveCode(v)}</div>
+        <div style="flex:1;min-width:220px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+            <span class="badge badge-${v.type === 'percent' ? 'info' : 'warning'}">${voucherValueLabel(v)}</span>
+            <span class="badge badge-neutral">${v.category || 'All Services'}</span>
+            <span class="badge badge-${v.clientId ? 'info' : 'success'}">${voucherRecipientDisplay(v)}</span>
+            ${v.purpose && v.purpose !== 'standard' ? `<span class="badge badge-info">${v.purpose}</span>` : ''}
+            <span class="badge badge-${st === 'active' ? 'success' : 'danger'}">${st === 'active' ? 'ACTIVE' : 'EXPIRED / LOCKED'}</span>
+            ${v.customBg ? '<span class="badge badge-info">Custom design</span>' : ''}
+          </div>
+          <div style="font-size:.85rem;color:var(--text-secondary);">
+            Used ${v.usedCount || 0}/${v.maxUses || 0} · Issued ${fmtDate(v.issuedDate)} · Starts ${fmtDate(v.startDate)} · Expires ${fmtDate(v.expiryDate)}${v.issuedBy ? ' · By ' + v.issuedBy : ''}
+          </div>
+          ${v.promoCode ? `<div style="font-size:.75rem;color:var(--text-muted);margin-top:4px;">Internal Code: ${v.code}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="editVoucher('${v.id}')">Edit</button>
+          <button class="btn btn-secondary" onclick="openTicket('${v.id}')">🎟️ Design / Download</button>
+          <button class="btn btn-success" onclick="redeem('${v.id}')">Mark as Used</button>
+          <button class="btn btn-secondary" onclick="copyVoucher('${v.id}')">Copy</button>
+          <button class="btn btn-danger" onclick="removeVoucher('${v.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-muted);text-align:center;padding:30px;">No vouchers found.</p>';
+
+    renderServiceChips();
+    feather.replace();
+  }
+
+  function generateVoucherCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code;
+
+    do {
+      code = 'CENTORO-' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    } while (DB.vouchers.some(v => v.code === code));
+
+    return code;
+  }
+
+  function generatePromoCodeValue() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code;
+
+    do {
+      code = 'CENTORO-PROMO-' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    } while (DB.vouchers.some(v => v.promoCode === code));
+
+    return code;
+  }
+
+  function generatePromoCode() {
+    document.getElementById('v-promo-code').value = generatePromoCodeValue();
+  }
+
+  function updateIssueToLayout() {
+    const val = document.getElementById('v-issue').value;
+
+    document.getElementById('issue-public-panel').style.display = val === '' ? 'block' : 'none';
+    document.getElementById('issue-client-panel').style.display = (val && val !== '__other__') ? 'block' : 'none';
+    document.getElementById('issue-other-panel').style.display = val === '__other__' ? 'block' : 'none';
+
+    if (val && val !== '__other__') {
+      renderIssueClientInfo(val);
+    } else {
+      document.getElementById('issue-client-info').innerHTML = '';
+    }
+  }
+
+  function renderIssueClientInfo(clientId) {
+    const c = getClient(clientId);
+
+    if (!c) {
+      document.getElementById('issue-client-info').innerHTML = '<div class="issue-info-box">Client not found.</div>';
+      return;
+    }
+
+    document.getElementById('issue-client-info').innerHTML = `
+      <div class="issue-info-box">
+        <strong>${c.name}</strong><br>
+        Email: ${c.email || '—'}<br>
+        Phone: ${c.phone || '—'}<br>
+        Address: ${c.address || '—'}
+      </div>
+    `;
+  }
+
+  function lockVoucherFields(isEdit) {
+    const locked = !!isEdit;
+
+    document.getElementById('v-code').readOnly = true;
+
+    document.getElementById('promo-code-group').style.display = locked ? 'none' : 'block';
+    document.getElementById('v-promo-code').readOnly = locked;
+    document.getElementById('promo-generate-btn').style.display = locked ? 'none' : '';
+
+    [
+      'v-type',
+      'v-value',
+      'v-category',
+      'v-start',
+      'v-purpose',
+      'v-issue',
+      'v-country',
+      'v-recipient-label',
+      'other-first-name',
+      'other-surname',
+      'other-initials',
+      'other-phone',
+      'other-email',
+      'other-address',
+      'other-company',
+      'other-company-ck'
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = locked;
+    });
+
+    document.getElementById('v-max').disabled = false;
+    document.getElementById('v-expiry').disabled = false;
+  }
+
+  function openVoucherModal(editId = null) {
+    populateVoucherTypes();
+    populateVoucherCategories();
+    populateIssueSelect();
+
+    document.getElementById('v-id').value = editId || '';
+    document.getElementById('voucher-modal-title').textContent = editId ? 'Edit Voucher' : 'Issue Voucher';
+    document.getElementById('voucher-save-btn').textContent = editId ? 'Save Voucher' : 'Issue Voucher';
+
+    document.getElementById('v-image').value = '';
+
+    lockVoucherFields(editId);
+
+    if (editId) {
+      const v = DB.vouchers.find(x => x.id === editId);
+      if (!v) return;
+
+      document.getElementById('v-code').value = v.code;
+      document.getElementById('v-promo-code').value = v.promoCode || '';
+      document.getElementById('v-type').value = v.type === 'fixed' ? 'ZAR' : v.type;
+      document.getElementById('v-value').value = v.value;
+      document.getElementById('v-category').value = v.category || 'All Services';
+      document.getElementById('v-max').value = v.maxUses || 10;
+      document.getElementById('v-start').value = v.startDate || '';
+      document.getElementById('v-expiry').value = v.expiryDate || '';
+      document.getElementById('v-purpose').value = v.purpose || 'standard';
+
+      if (v.clientId) {
+        populateIssueSelect(v.clientId);
+      } else if (v.company || [v.otherFirstName, v.otherSurname].filter(Boolean).join(' ').trim()) {
+        populateIssueSelect('__other__');
+      } else {
+        populateIssueSelect('');
+      }
+
+      document.getElementById('other-first-name').value = v.otherFirstName || '';
+      document.getElementById('other-surname').value = v.otherSurname || '';
+      document.getElementById('other-initials').value = v.otherInitials || '';
+      document.getElementById('other-phone').value = v.otherPhone || '';
+      document.getElementById('other-email').value = v.otherEmail || '';
+      document.getElementById('other-address').value = v.otherAddress || '';
+      document.getElementById('other-company').value = v.company || '';
+      document.getElementById('other-company-ck').value = v.companyCK || '';
+
+      document.getElementById('v-country').value = v.recipientCountry || '';
+      document.getElementById('v-recipient-label').value = v.recipientLabel || '';
+
+      updateIssueToLayout();
+    } else {
+      document.getElementById('v-code').value = generateVoucherCode();
+      document.getElementById('v-promo-code').value = '';
+      document.getElementById('v-type').value = 'percent';
+      document.getElementById('v-value').value = '';
+      document.getElementById('v-category').value = 'All Services';
+      document.getElementById('v-max').value = 10;
+      document.getElementById('v-start').value = new Date().toISOString().slice(0, 10);
+
+      const expiry = new Date();
+      expiry.setMonth(expiry.getMonth() + 1);
+      document.getElementById('v-expiry').value = expiry.toISOString().slice(0, 10);
+
+      document.getElementById('v-purpose').value = 'standard';
+      document.getElementById('v-issue').value = '';
+
+      document.getElementById('other-first-name').value = '';
+      document.getElementById('other-surname').value = '';
+      document.getElementById('other-initials').value = '';
+      document.getElementById('other-phone').value = '';
+      document.getElementById('other-email').value = '';
+      document.getElementById('other-address').value = '';
+      document.getElementById('other-company').value = '';
+      document.getElementById('other-company-ck').value = '';
+
+      document.getElementById('v-country').value = '';
+      document.getElementById('v-recipient-label').value = '';
+
+      updateIssueToLayout();
+    }
+
+    document.getElementById('voucher-modal').classList.add('active');
+  }
+
+  async function saveVoucher() {
+    const id = document.getElementById('v-id').value;
+    const maxUses = parseInt(document.getElementById('v-max').value) || 1;
+    const expiryDate = document.getElementById('v-expiry').value;
+    const file = document.getElementById('v-image').files[0];
+
+    const finishSave = (rec) => {
+      if (file) {
+        fileToDataUrl(file, d => {
+          rec.customBg = d;
+          ApiService.updateVoucher(Number(rec.id), rec).catch(error => alert(error.message || 'Unable to update voucher.'));
+          closeM('voucher-modal');
+          renderVouchers();
+        });
+      } else {
+        ApiService.updateVoucher(Number(rec.id), rec).catch(error => alert(error.message || 'Unable to update voucher.'));
+        closeM('voucher-modal');
+        renderVouchers();
+      }
+    };
+
+    if (id) {
+      const rec = DB.vouchers.find(x => x.id === id);
+      if (!rec) return;
+
+      rec.maxUses = maxUses;
+      rec.expiryDate = expiryDate;
+      rec.updatedAt = new Date().toISOString();
+      rec.updatedBy = getCurrentUser().name || 'Admin';
+
+      finishSave(rec);
+      return;
+    }
+
+    const code = document.getElementById('v-code').value.trim().toUpperCase();
+    const promoCode = document.getElementById('v-promo-code').value.trim().toUpperCase();
+    const type = document.getElementById('v-type').value;
+    const value = parseFloat(document.getElementById('v-value').value) || 0;
+    const category = document.getElementById('v-category').value;
+    const startDate = document.getElementById('v-start').value;
+    const purpose = document.getElementById('v-purpose').value;
+    const issueVal = document.getElementById('v-issue').value;
+
+    if (!code) {
+      alert('System voucher code is required.');
+      return;
+    }
+
+    if (!value || value <= 0) {
+      alert('Value is required.');
+      return;
+    }
+
+    let clientId = null;
+    let recipientCountry = '';
+    let recipientLabel = '';
+
+    let otherFirstName = '';
+    let otherSurname = '';
+    let otherInitials = '';
+    let otherPhone = '';
+    let otherEmail = '';
+    let otherAddress = '';
+    let company = '';
+    let companyCK = '';
+
+    if (issueVal === '__other__') {
+      otherFirstName = document.getElementById('other-first-name').value.trim();
+      otherSurname = document.getElementById('other-surname').value.trim();
+      otherInitials = document.getElementById('other-initials').value.trim();
+      otherPhone = document.getElementById('other-phone').value.trim();
+      otherEmail = document.getElementById('other-email').value.trim();
+      otherAddress = document.getElementById('other-address').value.trim();
+      company = document.getElementById('other-company').value.trim();
+      companyCK = document.getElementById('other-company-ck').value.trim();
+
+      if (!company && !otherFirstName && !otherSurname) {
+        alert('Please capture at least a recipient name or company/business name for Other.');
+        return;
+      }
+    } else if (issueVal) {
+      clientId = issueVal;
+    } else {
+      recipientCountry = document.getElementById('v-country').value.trim();
+      recipientLabel = document.getElementById('v-recipient-label').value.trim();
+    }
+
+    const rec = {
+      id: nextId('VCH', 'vouchers'),
+      code,
+      promoCode,
+      type,
+      value,
+      category,
+      clientId,
+      public: !clientId,
+      issueType: issueVal === '__other__' ? 'other' : issueVal ? 'client' : 'public',
+      maxUses,
+      usedCount: 0,
+      startDate,
+      expiryDate,
+      recipientCountry,
+      recipientLabel,
+      otherFirstName,
+      otherSurname,
+      otherInitials,
+      otherPhone,
+      otherEmail,
+      otherAddress,
+      company,
+      companyCK,
+      purpose,
+      issuedDate: new Date().toISOString().slice(0, 10),
+      issuedAt: new Date().toISOString(),
+      issuedBy: getCurrentUser().name || 'Admin',
+      status: 'active',
+      customBg: null
+    };
+
+    try {
+      const response = await ApiService.createVoucher(rec);
+      const saved = response.data || rec;
+      DB.vouchers.push({ ...saved, id: String(saved.id) });
+      finishSave(DB.vouchers[DB.vouchers.length - 1]);
+    } catch (error) { alert(error.message || 'Unable to create voucher.'); }
+  }
+
+  function editVoucher(id) {
+    openVoucherModal(id);
+  }
+
+  async function redeem(id) {
+    const v = DB.vouchers.find(x => x.id === id);
+    if (!v) return;
+
+    const st = voucherStatus(v);
+
+    if (st !== 'active') {
+      alert('🔒 This voucher is expired or locked.');
+      return;
+    }
+
+    if ((v.usedCount || 0) >= (v.maxUses || 1)) {
+      alert('🔒 This voucher has already reached its maximum uses.');
+      return;
+    }
+
+    if (!confirm('Mark ' + getActiveCode(v) + ' as used?')) return;
+
+    try { const response = await ApiService.redeemVoucher(Number(id)); Object.assign(v, response.data || { usedCount: (v.usedCount || 0) + 1 }); renderVouchers(); }
+    catch (error) { alert(error.message || 'Unable to redeem voucher.'); }
+  }
+
+  async function removeVoucher(id) {
+    if (!confirm('To Bin?')) return;
+    try { await ApiService.deleteVoucher(Number(id)); DB.vouchers = DB.vouchers.filter(v => String(v.id) !== String(id)); renderVouchers(); }
+    catch (error) { alert(error.message || 'Unable to delete voucher.'); }
+  }
+
+  function copyVoucher(id) {
+    const v = DB.vouchers.find(x => x.id === id);
+    if (!v) return;
+
+    const text = getActiveCode(v);
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => alert('Voucher code copied.'))
+        .catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+
+    try {
+      document.execCommand('copy');
+      alert('Voucher code copied.');
+    } catch (e) {
+      alert(text);
+    }
+
+    document.body.removeChild(ta);
+  }
+
+  function drawQR(ctx, text, x, y, size) {
+    try {
+      const q = qrcode(0, 'M');
+      q.addData(text);
+      q.make();
+
+      const n = q.getModuleCount();
+      const cell = size / n;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - 8, y - 8, size + 16, size + 16);
+
+      ctx.fillStyle = '#000000';
+
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (q.isDark(r, c)) {
+            ctx.fillRect(x + c * cell, y + r * cell, cell + 0.5, cell + 0.5);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  function openTicket(id) {
+    ticketVoucher = DB.vouchers.find(x => x.id === id);
+    customBgImg = null;
+
+    if (ticketVoucher && ticketVoucher.customBg) {
+      const im = new Image();
+      im.onload = () => {
+        customBgImg = im;
+        drawTicket();
+      };
+      im.src = ticketVoucher.customBg;
+    }
+
+    document.getElementById('tk-status').textContent = ticketVoucher && ticketVoucher.customBg ? '✓ Using your uploaded design.' : '';
+    document.getElementById('ticket-modal').classList.add('active');
+    drawTicket();
+  }
+
+  function uploadCustomBg(e) {
+    const f = e.target.files[0];
+    if (!f || !ticketVoucher) return;
+
+    document.getElementById('tk-status').textContent = '⏳ Loading ' + f.name + '...';
+
+    fileToDataUrl(f, d => {
+      ticketVoucher.customBg = d;
+      saveDB();
+
+      const im = new Image();
+      im.onload = () => {
+        customBgImg = im;
+        drawTicket();
+        document.getElementById('tk-status').innerHTML = '✅ <strong style="color:var(--success);">' + f.name + '</strong> applied.';
+      };
+      im.src = d;
+
+      renderVouchers();
+    });
+
+    e.target.value = '';
+  }
+
+  function removeCustomBg() {
+    if (!ticketVoucher) return;
+
+    ticketVoucher.customBg = null;
+    customBgImg = null;
+
+    saveDB();
+    drawTicket();
+    renderVouchers();
+
+    document.getElementById('tk-status').textContent = '';
+  }
+
+  function drawTicket() {
+    if (!ticketVoucher) return;
+
+    const v = ticketVoucher;
+    const bg = document.getElementById('tk-bg').value;
+    const ac = document.getElementById('tk-accent').value;
+    const cv = document.getElementById('ticket-canvas');
+    const ctx = cv.getContext('2d');
+
+    const displayCode = getActiveCode(v);
+
+    ctx.clearRect(0, 0, 1000, 420);
+
+    if (customBgImg) {
+      const sc = Math.max(1000 / customBgImg.width, 420 / customBgImg.height);
+      const w = customBgImg.width * sc;
+      const h = customBgImg.height * sc;
+
+      ctx.drawImage(customBgImg, (1000 - w) / 2, (420 - h) / 2, w, h);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, 0, 1000, 420);
+    } else {
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, 1000, 420);
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 6;
+      ctx.strokeRect(14, 14, 972, 392);
+    }
+
+    ctx.fillStyle = ac;
+    ctx.font = 'bold 42px Inter';
+    ctx.fillText('CENTORO ENTERPRISE', 50, 90);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px Inter';
+    ctx.fillText('Empowering Excellence. Defining Success.', 50, 122);
+
+    ctx.fillStyle = ac;
+    ctx.font = 'bold 64px Courier New';
+    ctx.fillText(displayCode, 50, 220);
+
+    const valueText = voucherValueLabel(v);
+    ctx.fillStyle = '#fff';
+    ctx.font = valueText.length > 12 ? 'bold 28px Inter' : 'bold 34px Inter';
+    ctx.fillText(valueText, 50, 275);
+
+    ctx.fillStyle = '#ddd';
+    ctx.font = '20px Inter';
+    ctx.fillText('Category: ' + (v.category || 'All Services'), 50, 320);
+    ctx.fillText('Issued To: ' + voucherRecipientDisplay(v), 50, 352);
+    ctx.fillText('Valid: ' + fmtDateDMY(v.startDate || v.issuedDate) + ' → ' + fmtDateDMY(v.expiryDate) + ' · Uses left: ' + ((v.maxUses || 0) - (v.usedCount || 0)), 50, 384);
+
+    drawQR(ctx, 'CENTORO-VOUCHER:' + v.code + '|' + v.value + (v.type === 'percent' ? '%' : v.type) + '|EXP:' + (v.expiryDate || ''), 770, 110, 180);
+
+    ctx.fillStyle = '#ddd';
+    ctx.font = '16px Inter';
+    ctx.fillText('Scan to claim', 800, 330);
+  }
+
+  function downloadTicket() {
+    drawTicket();
+
+    const a = document.createElement('a');
+    a.download = (ticketVoucher ? getActiveCode(ticketVoucher) : 'voucher') + '-ticket.png';
+    a.href = document.getElementById('ticket-canvas').toDataURL('image/png');
+    a.click();
+  }
+
+  async function loadVoucherData() {
+    try {
+      const [vouchers, clients] = await Promise.all([ApiService.getVouchers(), ApiService.getClients()]);
+      DB.vouchers = (vouchers.data || []).map(v => ({ ...v, id: String(v.id), clientId: v.clientId && String(v.clientId) }));
+      DB.clients = (clients.data || []).map(c => ({ ...c, id: String(c.id) }));
+      renderVouchers();
+    } catch (error) { console.error('Unable to load voucher data:', error); renderVouchers(); }
+  }
+  loadVoucherData();
+  feather.replace();
+</script>
+</body>
+</html>

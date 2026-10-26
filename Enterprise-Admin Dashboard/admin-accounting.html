@@ -1,0 +1,2300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Accounting · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="admin-accounting.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+  .tab { padding: 10px 16px; background: transparent; color: var(--text-secondary); font-weight: 600; border: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: .85rem; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .bank-balance { background: linear-gradient(135deg, var(--primary-dark), var(--primary)); color: #0f172a; padding: 22px; border-radius: var(--radius); margin-bottom: 20px; }
+  .bank-balance .amount { font-size: 2.2rem; font-weight: 800; }
+  tr.clickable { cursor: pointer; }
+  #embed-frame { width: 100%; height: 60vh; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  #print-area { display: none; }
+  .statement-output { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .statement-output table { width: 100%; border-collapse: collapse; }
+  .statement-output th, .statement-output td { border-bottom: 1px solid var(--border); padding: 8px 6px; font-size: .85rem; text-align: left; vertical-align: top; }
+  .statement-output th { color: var(--text-secondary); text-transform: uppercase; font-size: .7rem; }
+  .highlight-card { outline: 2px solid var(--primary) !important; transition: outline .2s; }
+
+  .bonus-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+  .bonus-card .staff-info { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bonus-card .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #0f172a; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; flex-shrink: 0; }
+  .bonus-card .progress-bar { height: 8px; background: var(--bg-surface); border-radius: 4px; overflow: hidden; margin: 6px 0; }
+  .bonus-card .progress-fill { height: 100%; border-radius: 4px; }
+  .bonus-metric { display: flex; justify-content: space-between; font-size: .8rem; color: var(--text-secondary); margin-bottom: 4px; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #print-area, #print-area * { visibility: visible; }
+    #print-area { display: block; position: absolute; left: 0; top: 0; width: 100%; background: #fff; color: #111; padding: 30px; }
+    #print-area table { width: 100%; border-collapse: collapse; }
+    #print-area th, #print-area td { border: 1px solid #ccc; padding: 6px 8px; font-size: .8rem; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar"><div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Accounting</h1></div><div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div></header>
+    <div class="page-content">
+      <div class="bank-balance"><div style="font-size:.8rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;opacity:.8;">Cash Book Balance (FNB Business)</div><div class="amount" id="bank-balance">R 0</div></div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('cashbook')">Cash Book</button>
+        <button class="tab" onclick="switchTab('alerts')">Alerts & Risk</button>
+        <button class="tab" onclick="switchTab('gdocs')">Google Docs & Sheets</button>
+        <button class="tab" onclick="switchTab('expenses')">Expenses</button>
+        <button class="tab" onclick="switchTab('docs')">Documents & Payslips</button>
+        <button class="tab" onclick="switchTab('sars')">SARS</button>
+        <button class="tab" onclick="switchTab('currencies')">Currencies</button>
+        <button class="tab" onclick="switchTab('budgets')">Budgets</button>
+        <button class="tab" onclick="switchTab('payroll')">Payroll</button>
+        <button class="tab" onclick="switchTab('bonuses')">Staff Bonuses</button>
+        <button class="tab" onclick="switchTab('ledger')">General Ledger</button>
+        <button class="tab" onclick="switchTab('statements')">Financial Statements</button>
+        <button class="tab" onclick="switchTab('ar')">Accounts Receivable</button>
+        <button class="tab" onclick="switchTab('ap')">Accounts Payable</button>
+        <button class="tab" onclick="switchTab('bankrec')">Bank Reconciliation</button>
+        <button class="tab" onclick="switchTab('inventory')">Inventory</button>
+        <button class="tab" onclick="switchTab('quotes')">Quotes & Estimates</button>
+        <button class="tab" onclick="switchTab('invoices')">Invoices</button>
+        <button class="tab" onclick="switchTab('discounts')">Discounts</button>
+        <button class="tab" onclick="switchTab('jobcosting')">Job Costing</button>
+        <button class="tab" onclick="switchTab('forecasting')">Budgeting & Forecasting</button>
+        <button class="tab" onclick="switchTab('reports')">Custom Reports</button>
+        <button class="tab" onclick="switchTab('audit')">Audit Trail</button>
+      </div>
+
+      <div id="tab-cashbook">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <h3 style="color:var(--text-primary);">Receipts & Payments <small style="color:var(--text-muted);">(click row → invoice)</small></h3>
+          <div style="display:flex;gap:8px;"><button class="btn btn-primary" onclick="openPaymentModal()">+ Record Receipt</button><button class="btn btn-secondary" onclick="printCashBook()"><i data-feather="printer"></i> Print for SARS</button></div>
+        </div>
+        <div class="card" style="padding:0;"><table class="data-table"><thead><tr><th>Date</th><th>Details</th><th>Ref</th><th style="color:var(--success);">In</th><th style="color:var(--danger);">Out</th><th>Balance</th></tr></thead><tbody id="cashbook-table"></tbody></table></div>
+      </div>
+
+      <div id="tab-alerts" style="display:none;">
+        <div class="card"><div class="card-header"><div class="card-title">Due & Overdue — send reminders</div></div>
+          <div class="card" style="padding:0;margin:0;"><table class="data-table"><thead><tr><th>Invoice</th><th>Client</th><th>Due</th><th>Days</th><th>Owed</th><th>Level</th><th></th></tr></thead><tbody id="due-table"></tbody></table></div></div>
+        <div class="card"><div class="card-header"><div class="card-title">Bad Payers</div></div>
+          <div class="card" style="padding:0;margin:0;"><table class="data-table"><thead><tr><th>Client</th><th>Overdue</th><th>Partial</th><th>Owed</th><th>Risk</th></tr></thead><tbody id="bad-table"></tbody></table></div></div>
+      </div>
+
+      <div id="tab-gdocs" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Company Google Workspace (Docs / Sheets / Excel online)</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="connectGmail()">🔗 Connect Company Gmail</button>
+              <button class="btn btn-secondary" onclick="openGdocModal()">+ Add Doc / Sheet</button>
+            </div></div>
+          <p id="g-status" style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;"></p>
+          <p style="color:var(--text-muted);font-size:.8rem;margin-bottom:12px;">Paste any Google Doc/Sheet link (from the company Gmail drive) — it embeds here for the whole team. Use <strong>Share / CC</strong> to loop staff in. Full two-way editing syncs automatically once the Google API is wired in your backend.</p>
+          <div class="card" style="padding:0;margin:0;"><table class="data-table"><thead><tr><th>Document</th><th>Type</th><th>Shared With</th><th>Added</th><th></th></tr></thead><tbody id="gdocs-table"></tbody></table></div>
+        </div>
+      </div>
+
+      <div id="tab-expenses" style="display:none;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;"><h3 style="color:var(--text-primary);">Expenses</h3><button class="btn btn-primary" onclick="openExpenseModal()">+ Log Expense</button></div>
+        <div class="card" style="padding:0;"><table class="data-table"><thead><tr><th>Date</th><th>Vendor</th><th>Description</th><th>Category</th><th>Project</th><th>Amount</th><th>VAT</th><th></th></tr></thead><tbody id="expenses-table"></tbody></table></div>
+      </div>
+
+      <div id="tab-docs" style="display:none;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <h3 style="color:var(--text-primary);">Payslips · Word · Excel · PDF · Images</h3>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="doc-type" style="padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"><option value="payslip">Payslip</option><option value="receipt">Receipt</option><option value="contract">Contract</option><option value="tax">Tax</option><option value="report">Word/Excel</option><option value="image">Image</option></select>
+            <label class="btn btn-primary" style="cursor:pointer;"><i data-feather="upload"></i> Upload<input type="file" id="doc-file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp" style="display:none;" onchange="uploadDoc(event)"></label>
+            <button class="btn btn-secondary" onclick="openPayslipModal()">Generate Payslip</button>
+          </div></div>
+        <div class="card" style="padding:0;"><table class="data-table"><thead><tr><th>Document</th><th>Type</th><th>Format</th><th>Date</th><th></th></tr></thead><tbody id="docs-table"></tbody></table></div>
+      </div>
+
+      <div id="tab-sars" style="display:none;">
+        <div class="stats-grid"><div class="stat-card"><div class="stat-label">Output VAT</div><div class="stat-value" id="vat-out">R 0</div></div><div class="stat-card green"><div class="stat-label">Input VAT</div><div class="stat-value" id="vat-in">R 0</div></div><div class="stat-card red"><div class="stat-label">Payable</div><div class="stat-value" id="vat-due">R 0</div></div></div>
+        <div style="text-align:right;margin-bottom:12px;display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary" onclick="printVAT201()"><i data-feather="printer"></i> Print VAT201</button>
+          <button class="btn btn-secondary" onclick="printSARS()"><i data-feather="printer"></i> Print VAT Report</button>
+        </div>
+        <div class="card" style="padding:0;"><table class="data-table"><thead><tr><th>Period</th><th>Output</th><th>Input</th><th>Payable</th><th>Status</th></tr></thead><tbody id="tax-table"></tbody></table></div>
+      </div>
+
+      <div id="tab-currencies" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">Currencies (base ZAR)</div><button class="btn btn-secondary" onclick="refreshCurrencyRates()">↻ Refresh (API later)</button></div><div class="card" style="padding:0;margin:0;"><table class="data-table"><thead><tr><th>Code</th><th>Name</th><th>Rate per R1</th></tr></thead><tbody id="cur-table"></tbody></table></div></div></div>
+
+      <div id="tab-budgets" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Category Budgets</div></div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group"><label>Category</label><input type="text" id="budget-cat" placeholder="e.g. Marketing"></div>
+            <div class="form-group"><label>Annual Budget</label><input type="number" id="budget-amount" step="0.01" min="0"></div>
+            <div class="form-group" style="display:flex;align-items:flex-end;"><button class="btn btn-primary" onclick="addBudgetForm()">Add Budget</button></div>
+          </div>
+          <div id="budget-list"></div>
+        </div>
+      </div>
+
+      <div id="tab-payroll" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Payroll Summary</div>
+            <a class="btn btn-primary" href="admin-payroll.html">Open Full Payroll</a>
+          </div>
+          <div id="payroll-summary"></div>
+        </div>
+      </div>
+
+      <!-- STAFF BONUSES TAB -->
+      <div id="tab-bonuses" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Staff Bonus Calculator — Performance Monitoring & Bonus Tracking</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="openBonusModal()">+ Add Bonus Entry</button>
+              <button class="btn btn-secondary" onclick="calculateAllBonuses()"><i data-feather="refresh-cw"></i> Recalculate All</button>
+              <button class="btn btn-secondary" onclick="printBonusReport()"><i data-feather="printer"></i> Print Report</button>
+            </div>
+          </div>
+
+          <div class="stats-grid" style="margin-bottom:16px;">
+            <div class="stat-card"><div class="stat-label">Total Bonus Pool</div><div class="stat-value" id="bonus-pool">R 0</div></div>
+            <div class="stat-card green"><div class="stat-label">Bonuses Earned</div><div class="stat-value" id="bonus-earned">R 0</div></div>
+            <div class="stat-card blue"><div class="stat-label">Staff Eligible</div><div class="stat-value" id="bonus-eligible">0</div></div>
+            <div class="stat-card"><div class="stat-label">Avg Performance</div><div class="stat-value" id="bonus-avg-perf">0%</div></div>
+          </div>
+
+          <div class="form-grid" style="margin-bottom:16px;">
+            <div class="form-group">
+              <label>Bonus Period</label>
+              <select id="bonus-period" onchange="renderBonuses()">
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="annual">Annual</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Filter by Department</label>
+              <select id="bonus-dept-filter" onchange="renderBonuses()">
+                <option value="">All Departments</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Sort By</label>
+              <select id="bonus-sort" onchange="renderBonuses()">
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="perf-desc">Performance (High-Low)</option>
+                <option value="bonus-desc">Bonus Amount (High-Low)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="bonus-staff-list"></div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header"><div class="card-title">Bonus History</div></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Date</th><th>Staff</th><th>Type</th><th>Amount</th><th>Reason</th><th>Status</th></tr></thead>
+              <tbody id="bonus-history-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-ledger" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">General Ledger / Double-Entry Journal</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="postCashbookToLedger()">Post Cashbook to Ledger</button>
+              <button class="btn btn-secondary" onclick="showTrialBalance()">Trial Balance</button>
+              <button class="btn btn-secondary" onclick="printTrialBalance()">Print Trial Balance</button>
+              <button class="btn btn-secondary" onclick="printLedger()">Print Ledger</button>
+            </div>
+          </div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group"><label>Date</label><input type="date" id="jrn-date"></div>
+            <div class="form-group"><label>Description</label><input type="text" id="jrn-desc" placeholder="e.g. Owner capital deposit"></div>
+            <div class="form-group"><label>Reference</label><input type="text" id="jrn-ref" placeholder="Optional ref"></div>
+            <div class="form-group"><label>Debit Account</label><select id="jrn-debit"></select></div>
+            <div class="form-group"><label>Credit Account</label><select id="jrn-credit"></select></div>
+            <div class="form-group"><label>Amount</label><input type="number" id="jrn-amount" step="0.01" min="0"></div>
+          </div>
+          <button class="btn btn-primary" onclick="saveJournal()">Add Journal Entry</button>
+          <div id="ledger-extra" class="statement-output" style="margin-top:16px;display:none;"></div>
+          <div class="card" style="padding:0;margin-top:16px;">
+            <table class="data-table">
+              <thead><tr><th>Date</th><th>Ref</th><th>Description</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
+              <tbody id="ledger-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-statements" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Financial Statements</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-secondary" onclick="renderStatement('pl')">Profit & Loss</button>
+              <button class="btn btn-secondary" onclick="renderStatement('balance')">Balance Sheet</button>
+              <button class="btn btn-secondary" onclick="renderStatement('cashflow')">Cash Flow</button>
+              <button class="btn btn-primary" onclick="printStatement()">Print Statement</button>
+            </div>
+          </div>
+          <div id="statement-output" class="statement-output">Select a statement to generate it. Use "Post Cashbook to Ledger" first if the ledger is empty.</div>
+        </div>
+      </div>
+
+      <div id="tab-ar" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Accounts Receivable — Debtors Aging</div></div>
+          <div id="ar-stats" class="stats-grid" style="margin-bottom:16px;"></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Invoice</th><th>Client</th><th>Due Date</th><th>Days Overdue</th><th>Outstanding</th><th>Aging</th></tr></thead>
+              <tbody id="ar-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-ap" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Accounts Payable — Creditors</div></div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group"><label>Supplier</label><input type="text" id="ap-supplier"></div>
+            <div class="form-group"><label>Description</label><input type="text" id="ap-desc"></div>
+            <div class="form-group"><label>Amount</label><input type="number" id="ap-amount" step="0.01" min="0"></div>
+            <div class="form-group"><label>VAT</label><input type="number" id="ap-vat" step="0.01" min="0"></div>
+            <div class="form-group"><label>Due Date</label><input type="date" id="ap-due"></div>
+            <div class="form-group"><label>Status</label><select id="ap-status"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></div>
+          </div>
+          <button class="btn btn-primary" onclick="savePayable()">Add Payable</button>
+          <div class="card" style="padding:0;margin-top:16px;">
+            <table class="data-table">
+              <thead><tr><th>Supplier</th><th>Description</th><th>Due</th><th>Amount</th><th>VAT</th><th>Status</th><th></th></tr></thead>
+              <tbody id="ap-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-bankrec" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Bank Reconciliation</div></div>
+          <div id="bankrec-stats" class="stats-grid" style="margin-bottom:16px;"></div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group"><label>Date</label><input type="date" id="bank-date"></div>
+            <div class="form-group"><label>Description</label><input type="text" id="bank-desc"></div>
+            <div class="form-group"><label>Type</label><select id="bank-type"><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option></select></div>
+            <div class="form-group"><label>Amount</label><input type="number" id="bank-amount" step="0.01" min="0"></div>
+            <div class="form-group"><label>Reference</label><input type="text" id="bank-ref"></div>
+          </div>
+          <button class="btn btn-primary" onclick="saveBankTransaction()">Add Bank Statement Line</button>
+          <div class="card" style="padding:0;margin-top:16px;">
+            <table class="data-table">
+              <thead><tr><th>Date</th><th>Description</th><th>Ref</th><th>Type</th><th>Amount</th><th>Reconciled</th><th></th></tr></thead>
+              <tbody id="bankrec-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-inventory" style="display:none;">
+        <div class="grid-2" style="margin-bottom:20px;">
+          <div class="card" id="inventory-item-card">
+            <div class="card-header"><div class="card-title">Inventory Item / Product</div></div>
+            <div class="form-grid">
+              <div class="form-group"><label>Item Name</label><input type="text" id="inv-item-name"></div>
+              <div class="form-group"><label>SKU</label><input type="text" id="inv-item-sku"></div>
+              <div class="form-group"><label>Category</label><input type="text" id="inv-item-category"></div>
+              <div class="form-group"><label>Opening Qty</label><input type="number" id="inv-item-qty" min="0" value="0"></div>
+              <div class="form-group"><label>Unit Cost</label><input type="number" id="inv-item-cost" step="0.01" min="0"></div>
+              <div class="form-group"><label>Selling Price</label><input type="number" id="inv-item-price" step="0.01" min="0"></div>
+              <div class="form-group"><label>Reorder Level</label><input type="number" id="inv-item-reorder" min="0" value="0"></div>
+            </div>
+            <button class="btn btn-primary" onclick="saveInventoryItem()">Add / Update Item</button>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Stock Movement</div><button class="btn btn-secondary" onclick="prepareNewItem()">+ Prepare New Item</button></div>
+            <div class="form-grid">
+              <div class="form-group"><label>Item</label><select id="mov-item"></select></div>
+              <div class="form-group"><label>Movement</label><select id="mov-type"><option value="purchase">Purchase / Stock In</option><option value="sale">Sale / Stock Out</option><option value="adjustment">Adjustment</option></select></div>
+              <div class="form-group"><label>Qty</label><input type="number" id="mov-qty" min="1" value="1"></div>
+              <div class="form-group"><label>Reference</label><input type="text" id="mov-ref" placeholder="Invoice / supplier / reason"></div>
+            </div>
+            <button class="btn btn-primary" onclick="saveStockMovement()">Save Movement</button>
+            <div style="margin-top:12px;font-size:.85rem;color:var(--text-secondary);" id="cogs-summary"></div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;margin-bottom:20px;">
+          <table class="data-table">
+            <thead><tr><th>Item</th><th>SKU</th><th>Category</th><th>Qty</th><th>Cost</th><th>Price</th><th>Stock Value</th><th>Status</th></tr></thead>
+            <tbody id="inventory-table"></tbody>
+          </table>
+        </div>
+        <div class="card" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Qty</th><th>Reference</th><th>COGS Value</th></tr></thead>
+            <tbody id="stock-movements-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tab-quotes" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Quotes & Estimates</div></div>
+          <div class="card" style="margin-bottom:14px;">
+            <div class="card-header"><div class="card-title">Quick Add Client</div></div>
+            <div class="form-grid">
+              <div class="form-group"><label>Client Name</label><input type="text" id="qc-name"></div>
+              <div class="form-group"><label>Email</label><input type="email" id="qc-email"></div>
+              <div class="form-group"><label>Phone</label><input type="text" id="qc-phone"></div>
+              <div class="form-group" style="display:flex;align-items:flex-end;"><button class="btn btn-secondary" onclick="quickAddQuoteClient()">Add Client</button></div>
+            </div>
+          </div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group"><label>Client</label><select id="quote-client"></select></div>
+            <div class="form-group"><label>Description</label><input type="text" id="quote-desc" placeholder="e.g. Website development quote"></div>
+            <div class="form-group"><label>Amount</label><input type="number" id="quote-amount" step="0.01" min="0"></div>
+            <div class="form-group"><label>Discount %</label><input type="number" id="quote-discount" step="0.01" min="0" value="0"></div>
+            <div class="form-group"><label>Valid Until</label><input type="date" id="quote-valid"></div>
+          </div>
+          <button class="btn btn-primary" onclick="saveQuote()">Add Quote</button>
+          <div class="card" style="padding:0;margin-top:16px;">
+            <table class="data-table">
+              <thead><tr><th>Date</th><th>Client</th><th>Description</th><th>Amount</th><th>Discount</th><th>Total</th><th>Valid Until</th><th>Status</th><th></th></tr></thead>
+              <tbody id="quotes-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-invoices" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Invoices</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a class="btn btn-secondary" href="admin-invoices.html">Open Full Invoices Page</a>
+              <button class="btn btn-primary" onclick="openPaymentModal()">Record Receipt</button>
+            </div>
+          </div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Tracking #</th><th>Client</th><th>Issue Date</th><th>Due Date</th><th>Total</th><th>Paid</th><th>Status</th><th></th></tr></thead>
+              <tbody id="accounting-invoices-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-discounts" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Discounts Register</div></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Date</th><th>Reference</th><th>Client</th><th>Description</th><th>Discount %</th><th>Discount Amount</th><th>Source</th></tr></thead>
+              <tbody id="discounts-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-jobcosting" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Project / Job Costing & Profitability</div></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Project</th><th>Client</th><th>Budget</th><th>Income</th><th>Expenses</th><th>Labour Cost</th><th>Profit</th><th>Margin</th></tr></thead>
+              <tbody id="jobcost-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-forecasting" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Budgeting & Cash Flow Forecasting</div></div>
+          <div id="forecast-output"></div>
+        </div>
+      </div>
+
+      <div id="tab-reports" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Customizable Reports</div></div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="form-group">
+              <label>Report Type</label>
+              <select id="report-type">
+                <option value="income-client">Income by Client</option>
+                <option value="expenses-category">Expenses by Category</option>
+                <option value="project-profit">Project Profitability</option>
+                <option value="cashbook">Cash Book</option>
+                <option value="vat">VAT Summary</option>
+              </select>
+            </div>
+            <div class="form-group"><label>From</label><input type="date" id="report-from"></div>
+            <div class="form-group"><label>To</label><input type="date" id="report-to"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+            <button class="btn btn-secondary" onclick="printReport()">Print Report</button>
+          </div>
+          <div id="report-output" class="statement-output">Choose a report type and click Generate.</div>
+        </div>
+      </div>
+
+      <div id="tab-audit" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Audit Trail</div></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Date/Time</th><th>User</th><th>Action</th><th>Reference</th></tr></thead>
+              <tbody id="audit-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- BONUS MODAL -->
+<div class="modal-overlay" id="bonus-modal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <div class="modal-title">Add Bonus Entry</div>
+      <button class="modal-close" onclick="closeM('bonus-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Staff Member</label>
+        <select id="bn-staff"></select>
+      </div>
+      <div class="form-group">
+        <label>Bonus Type</label>
+        <select id="bn-type">
+          <option value="performance">Performance Bonus</option>
+          <option value="project">Project Completion Bonus</option>
+          <option value="sales">Sales Target Bonus</option>
+          <option value="attendance">Attendance Bonus</option>
+          <option value="referral">Referral Bonus</option>
+          <option value="custom">Custom Bonus</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Amount (R)</label>
+        <input type="number" id="bn-amount" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Performance Score (%)</label>
+        <input type="number" id="bn-perf" min="0" max="100" value="0">
+      </div>
+      <div class="form-group">
+        <label>Reason / Notes</label>
+        <textarea id="bn-reason" rows="2" placeholder="Why is this bonus being awarded?"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="bn-status">
+          <option value="pending">Pending Approval</option>
+          <option value="approved">Approved</option>
+          <option value="paid">Paid</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('bonus-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBonus()">Save Bonus</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="embed-modal"><div class="modal" style="max-width:900px;"><div class="modal-header"><div class="modal-title" id="embed-title"></div><button class="modal-close" onclick="closeM('embed-modal')">✕</button></div><div class="modal-body" style="padding:10px;"><iframe id="embed-frame"></iframe></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('embed-modal')">Close</button><button class="btn btn-primary" id="embed-open" onclick="">Open in Google</button></div></div></div>
+<div class="modal-overlay" id="share-modal"><div class="modal" style="max-width:440px;"><div class="modal-header"><div class="modal-title">Share / CC Staff</div><button class="modal-close" onclick="closeM('share-modal')">✕</button></div><div class="modal-body"><p id="share-doc-name" style="color:var(--text-secondary);font-size:.85rem;margin-bottom:10px;"></p><div id="share-staff" style="display:flex;flex-direction:column;gap:8px;"></div></div><div class="modal-footer"><button class="btn btn-primary" onclick="saveShare()">Share</button></div></div></div>
+<div class="modal-overlay" id="gdoc-modal"><div class="modal" style="max-width:480px;"><div class="modal-header"><div class="modal-title">Add Google Doc / Sheet</div><button class="modal-close" onclick="closeM('gdoc-modal')">✕</button></div><div class="modal-body"><div class="form-group"><label>Document name</label><input id="gd-name" placeholder="e.g. Cash Book 2026 (Sheet)"></div><div class="form-group"><label>Type</label><select id="gd-type"><option value="doc">Google Doc (Word-style)</option><option value="sheet">Google Sheet (Excel-style)</option></select></div><div class="form-group"><label>Google link</label><input id="gd-url" placeholder="https://docs.google.com/document/d/... or spreadsheets/d/..."></div></div><div class="modal-footer"><button class="btn btn-primary" onclick="saveGdoc()">Add</button></div></div></div>
+<div class="modal-overlay" id="docview-modal"><div class="modal" style="max-width:700px;"><div class="modal-header"><div class="modal-title" id="dv-title"></div><button class="modal-close" onclick="closeM('docview-modal')">✕</button></div><div class="modal-body" id="dv-body" style="text-align:center;"></div></div></div>
+
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Record Receipt</div><button class="modal-close" onclick="closeM('payment-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Source</label>
+          <select id="pay-source" onchange="togglePaySource()">
+            <option value="invoice">Invoice Payment</option>
+            <option value="service">Service Sale</option>
+            <option value="product">Product / Stock Sale</option>
+            <option value="other">Other Receipt</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Date</label><input type="date" id="pay-date"></div>
+        <div class="form-group"><label>Method</label><select id="pay-method"><option>EFT</option><option>Cash</option><option>Card</option><option>Yoco</option><option>PayFast</option></select></div>
+        <div class="form-group"><label>Ref (system)</label><input id="pay-ref"></div>
+      </div>
+      <div id="pay-invoice-row" class="form-group">
+        <label>Invoice</label>
+        <select id="pay-invoice" onchange="fillPayAmt()"></select>
+      </div>
+      <div id="pay-client-row" class="form-grid">
+        <div class="form-group"><label>Client</label><select id="pay-client"></select></div>
+        <div class="form-group"><label>Quick Add Client Name</label><input id="pay-new-client-name" placeholder="New client name"></div>
+        <div class="form-group"><label>Email</label><input id="pay-new-client-email"></div>
+        <div class="form-group"><label>Phone</label><input id="pay-new-client-phone"></div>
+      </div>
+      <div id="pay-client-add-row" style="margin-bottom:14px;">
+        <button type="button" class="btn btn-secondary" onclick="quickAddReceiptClient()">+ Add Client</button>
+      </div>
+      <div id="pay-service-row" class="form-group">
+        <label>Service</label>
+        <select id="pay-service" onchange="payServiceSelected()"></select>
+      </div>
+      <div id="pay-product-row" class="form-grid">
+        <div class="form-group"><label>Product / Stock Item</label><select id="pay-product" onchange="payProductSelected()"></select></div>
+        <div class="form-group"><label>Qty</label><input type="number" id="pay-qty" value="1" min="1" oninput="calcPayTotals()"></div>
+      </div>
+      <div id="pay-desc-row" class="form-group">
+        <label>Description</label>
+        <input id="pay-desc" placeholder="Description for the receipt / invoice line">
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Amount / Unit Price</label><input type="number" id="pay-amount" step="0.01" min="0" oninput="calcPayTotals()"></div>
+        <div class="form-group"><label>Discount %</label><input type="number" id="pay-discount" step="0.01" min="0" value="0" oninput="calcPayTotals()"></div>
+        <div class="form-group"><label>VAT %</label><input type="number" id="pay-vat" step="0.01" min="0" value="0" oninput="calcPayTotals()"></div>
+        <div class="form-group"><label>Total</label><input id="pay-total" readonly></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('payment-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePayment()">Save Receipt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="reminder-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Payment Reminder</div><button class="modal-close" onclick="closeM('reminder-modal')">✕</button></div>
+    <div class="modal-body">
+      <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.8;">
+        <div><strong>Client:</strong> <span id="rem-client"></span></div>
+        <div><strong>Contact:</strong> <span id="rem-contact"></span></div>
+        <div><strong>Invoice:</strong> <span id="rem-invoice"></span></div>
+        <div><strong>Due Date:</strong> <span id="rem-due"></span></div>
+        <div><strong>Amount Due:</strong> <span id="rem-amount"></span></div>
+        <div><strong>Status:</strong> <span id="rem-status"></span></div>
+      </div>
+      <div class="form-group" style="margin-top:14px;">
+        <label>Reminder Message</label>
+        <textarea id="rem-message" rows="7"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="copyReminderMessage()">Copy Message</button>
+      <button class="btn btn-primary" onclick="markReminderSent()">Mark Reminder Sent</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="expense-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Log Expense</div><button class="modal-close" onclick="closeM('expense-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Vendor</label><input id="exp-vendor"></div>
+        <div class="form-group"><label>Project (optional)</label><select id="exp-project"></select></div>
+        <div class="form-group"><label>Category</label>
+          <select id="exp-category" onchange="toggleExpenseOther()">
+            <option>Equipment</option><option>Office</option><option>Software</option><option>Travel</option><option>Marketing</option><option>Tax</option><option>Utilities</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Date</label><input type="date" id="exp-date"></div>
+        <div class="form-group"><label>Amount</label><input type="number" id="exp-amount" oninput="document.getElementById('exp-vat').value=((parseFloat(this.value)||0)*15/115).toFixed(2)"></div>
+        <div class="form-group"><label>VAT claim</label><input id="exp-vat" readonly></div>
+        <div class="form-group"><label>Status</label><select id="exp-status"><option value="approved">Approved</option><option value="pending">Pending</option></select></div>
+      </div>
+      <div class="form-group" id="exp-other-wrap" style="display:none;">
+        <label>Specify "Other" Category</label>
+        <input id="exp-other" placeholder="e.g. Cleaning Services, Licenses, Donations">
+      </div>
+      <div class="form-group"><label>Description</label><input id="exp-desc"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="saveExpense()">Log</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="payslip-modal"><div class="modal"><div class="modal-header"><div class="modal-title">Generate Payslip</div><button class="modal-close" onclick="closeM('payslip-modal')">✕</button></div><div class="modal-body"><div class="form-grid"><div class="form-group"><label>Staff</label><select id="ps-staff" onchange="previewPayslip()"></select></div><div class="form-group"><label>Period</label><input type="month" id="ps-period" value="2026-07" onchange="previewPayslip()"></div></div><div id="ps-preview" style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:16px;line-height:1.9;"></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="printPayslip()">Print</button><button class="btn btn-primary" onclick="savePayslipDoc()">Save to Documents</button></div></div></div>
+<div id="print-area"></div>
+
+<script src="centoroapi.js"></script>
+<script src="admin-accounting.js"></script>
+<script>
+  initApp('admin-accounting.html', 'Accounting');
+
+  if (!DB.google) DB.google = { connected: false, email: '', docs: [] };
+  if (!DB.journalEntries) DB.journalEntries = [];
+  if (!DB.payables) DB.payables = [];
+  if (!DB.bankTransactions) DB.bankTransactions = [];
+  if (!DB.inventory) DB.inventory = [];
+  if (!DB.stockMovements) DB.stockMovements = [];
+  if (!DB.quotes) DB.quotes = [];
+  if (!DB.auditTrail) DB.auditTrail = [];
+  if (!DB.chartAccounts) DB.chartAccounts = [];
+  if (!DB.reminders) DB.reminders = [];
+  if (!DB.discounts) DB.discounts = [];
+  if (!DB.staffBonuses) DB.staffBonuses = [];
+
+  let cashRows = [], shareTarget = null, lastPayTotal = 0, reminderInvoiceId = null;
+
+  function closeM(id) {
+    document.getElementById(id).classList.remove('active');
+  }
+
+  function switchTab(n) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    [
+      'cashbook','alerts','gdocs','expenses','docs','sars','currencies','budgets','payroll',
+      'bonuses','ledger','statements','ar','ap','bankrec','inventory','quotes','invoices','discounts',
+      'jobcosting','forecasting','reports','audit'
+    ].forEach(x => document.getElementById('tab-' + x).style.display = x === n ? 'block' : 'none');
+  }
+
+  function auditLog(action, ref = '') {
+    DB.auditTrail.unshift({
+      id: nextId('AUD', 'auditTrail'),
+      time: new Date().toISOString(),
+      user: getCurrentUser().name || 'Admin',
+      action,
+      ref
+    });
+    if (DB.auditTrail.length > 500) DB.auditTrail.pop();
+    saveDB();
+  }
+
+  function printHeader() {
+    return `<h1>CENTORO ENTERPRISE</h1><p>Reg.nr: 2018/567462/07 · Tax Reg: 9908825160 · 081 567 9592</p><hr>`;
+  }
+
+  function printHtml(title, html) {
+    document.getElementById('print-area').innerHTML = printHeader() + `<h2>${title}</h2>` + html;
+    window.print();
+  }
+
+  /* ===== STAFF BONUSES ===== */
+  function openBonusModal() {
+    const staff = [...DB.staff].sort((a, b) => a.name.localeCompare(b.name));
+    document.getElementById('bn-staff').innerHTML = '<option value="">Select...</option>' + staff.map(s => `<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+    document.getElementById('bn-type').value = 'performance';
+    document.getElementById('bn-amount').value = '';
+    document.getElementById('bn-perf').value = '0';
+    document.getElementById('bn-reason').value = '';
+    document.getElementById('bn-status').value = 'pending';
+    document.getElementById('bonus-modal').classList.add('active');
+  }
+
+  function saveBonus() {
+    const staffId = document.getElementById('bn-staff').value;
+    const type = document.getElementById('bn-type').value;
+    const amount = parseFloat(document.getElementById('bn-amount').value) || 0;
+    const perf = parseInt(document.getElementById('bn-perf').value) || 0;
+    const reason = document.getElementById('bn-reason').value.trim();
+    const status = document.getElementById('bn-status').value;
+
+    if (!staffId) { alert('Please select a staff member.'); return; }
+    if (!amount || amount <= 0) { alert('Please enter a valid bonus amount.'); return; }
+
+    const bonus = {
+      id: nextId('BNS', 'staffBonuses'),
+      staffId,
+      type,
+      amount,
+      performance: perf,
+      reason,
+      status,
+      date: new Date().toISOString().slice(0, 10),
+      createdBy: getCurrentUser().name || 'Admin'
+    };
+
+    DB.staffBonuses.push(bonus);
+    saveDB();
+    closeM('bonus-modal');
+    renderBonuses();
+    auditLog(`Bonus added: ${fmtZAR(amount)} for ${getStaff(staffId) ? getStaff(staffId).name : 'staff'}`, type);
+  }
+
+  function getStaffPerformance(staffId) {
+    const bonuses = DB.staffBonuses.filter(b => b.staffId === staffId);
+    if (!bonuses.length) return 0;
+    const totalPerf = bonuses.reduce((s, b) => s + (b.performance || 0), 0);
+    return Math.round(totalPerf / bonuses.length);
+  }
+
+  function getStaffTotalBonus(staffId) {
+    return DB.staffBonuses.filter(b => b.staffId === staffId && b.status !== 'pending').reduce((s, b) => s + (b.amount || 0), 0);
+  }
+
+  function getStaffCompletedJobs(staffId) {
+    return (DB.jobCards || []).filter(j => j.assigneeId === staffId && j.status === 'completed').length;
+  }
+
+  function getStaffActiveJobs(staffId) {
+    return (DB.jobCards || []).filter(j => j.assigneeId === staffId && j.status !== 'completed').length;
+  }
+
+  function calculateAllBonuses() {
+    DB.staff.forEach(s => {
+      const completedJobs = getStaffCompletedJobs(s.id);
+      const activeJobs = getStaffActiveJobs(s.id);
+      const totalJobs = completedJobs + activeJobs;
+      const completionRate = totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0;
+
+      const existingAuto = DB.staffBonuses.find(b => b.staffId === s.id && b.type === 'performance' && b.reason === 'Auto-calculated from job performance');
+      
+      const perfScore = Math.min(100, completionRate);
+      const bonusAmount = Math.round((s.salary || 0) * (perfScore / 100) * 0.1);
+
+      if (existingAuto) {
+        existingAuto.performance = perfScore;
+        existingAuto.amount = bonusAmount;
+      } else if (perfScore > 0) {
+        DB.staffBonuses.push({
+          id: nextId('BNS', 'staffBonuses'),
+          staffId: s.id,
+          type: 'performance',
+          amount: bonusAmount,
+          performance: perfScore,
+          reason: 'Auto-calculated from job performance',
+          status: 'pending',
+          date: new Date().toISOString().slice(0, 10),
+          createdBy: 'System'
+        });
+      }
+    });
+
+    saveDB();
+    renderBonuses();
+    auditLog('Recalculated all staff bonuses');
+    alert('✅ All staff bonuses recalculated based on job completion performance.');
+  }
+
+  function renderBonuses() {
+    const period = document.getElementById('bonus-period').value;
+    const deptFilter = document.getElementById('bonus-dept-filter').value;
+    const sort = document.getElementById('bonus-sort').value;
+
+    const depts = [...new Set(DB.staff.map(s => s.role).filter(Boolean))].sort();
+    const deptSel = document.getElementById('bonus-dept-filter');
+    const currentDept = deptSel.value;
+    deptSel.innerHTML = '<option value="">All Departments</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
+    if (currentDept) deptSel.value = currentDept;
+
+    let staffList = DB.staff.filter(s => s.status === 'active');
+    if (deptFilter) staffList = staffList.filter(s => s.role === deptFilter);
+
+    staffList.sort((a, b) => {
+      if (sort === 'name-asc') return (a.name || '').localeCompare(b.name || '');
+      if (sort === 'perf-desc') return getStaffPerformance(b.id) - getStaffPerformance(a.id);
+      if (sort === 'bonus-desc') return getStaffTotalBonus(b.id) - getStaffTotalBonus(a.id);
+      return 0;
+    });
+
+    let totalPool = 0, totalEarned = 0, totalPerf = 0;
+
+    document.getElementById('bonus-staff-list').innerHTML = staffList.map(s => {
+      const perf = getStaffPerformance(s.id);
+      const totalBonus = getStaffTotalBonus(s.id);
+      const completedJobs = getStaffCompletedJobs(s.id);
+      const activeJobs = getStaffActiveJobs(s.id);
+      const ini = s.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      const perfColor = perf >= 80 ? 'var(--success)' : perf >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+      totalPool += Math.round((s.salary || 0) * 0.1);
+      totalEarned += totalBonus;
+      totalPerf += perf;
+
+      return `<div class="bonus-card">
+        <div class="staff-info">
+          <div class="avatar">${ini}</div>
+          <div style="flex:1;">
+            <div style="font-weight:600;color:var(--text-primary);">${s.name}</div>
+            <div style="font-size:.75rem;color:var(--text-muted);">${s.role || 'No role'} · Salary: ${fmtZAR(s.salary || 0)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:700;color:var(--success);font-size:1.1rem;">${fmtZAR(totalBonus)}</div>
+            <div style="font-size:.7rem;color:var(--text-muted);">Total Earned</div>
+          </div>
+        </div>
+        <div class="bonus-metric">
+          <span>Performance Score</span>
+          <span style="font-weight:700;color:${perfColor};">${perf}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${perf}%;background:${perfColor};"></div>
+        </div>
+        <div class="bonus-metric">
+          <span>Jobs: ${completedJobs} completed / ${activeJobs} active</span>
+          <span>Potential: ${fmtZAR(Math.round((s.salary || 0) * 0.1))}</span>
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-muted);text-align:center;padding:20px;">No active staff found.</p>';
+
+    const avgPerf = staffList.length ? Math.round(totalPerf / staffList.length) : 0;
+    document.getElementById('bonus-pool').textContent = fmtZAR(totalPool);
+    document.getElementById('bonus-earned').textContent = fmtZAR(totalEarned);
+    document.getElementById('bonus-eligible').textContent = staffList.length;
+    document.getElementById('bonus-avg-perf').textContent = avgPerf + '%';
+
+    const history = [...DB.staffBonuses].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 20);
+    document.getElementById('bonus-history-table').innerHTML = history.map(b => {
+      const s = getStaff(b.staffId);
+      const statusBadge = { pending: 'warning', approved: 'info', paid: 'success' }[b.status] || 'neutral';
+      return `<tr>
+        <td>${fmtDate(b.date)}</td>
+        <td><strong>${s ? s.name : 'Unknown'}</strong></td>
+        <td><span class="badge badge-info">${b.type}</span></td>
+        <td>${fmtZAR(b.amount)}</td>
+        <td>${b.reason || '—'}</td>
+        <td><span class="badge badge-${statusBadge}">${b.status}</span></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No bonus history.</td></tr>';
+  }
+
+  function printBonusReport() {
+    let html = '<table><tr><th>Staff</th><th>Role</th><th>Performance</th><th>Total Bonus</th><th>Jobs Completed</th></tr>';
+    DB.staff.filter(s => s.status === 'active').forEach(s => {
+      const perf = getStaffPerformance(s.id);
+      const totalBonus = getStaffTotalBonus(s.id);
+      const completedJobs = getStaffCompletedJobs(s.id);
+      html += `<tr><td>${s.name}</td><td>${s.role || '—'}</td><td>${perf}%</td><td>${fmtZAR(totalBonus)}</td><td>${completedJobs}</td></tr>`;
+    });
+    html += '</table>';
+    printHtml('STAFF BONUS REPORT', html);
+  }
+
+  /* ===== END STAFF BONUSES ===== */
+
+  function prepareNewItem() {
+    const fields = ['inv-item-name','inv-item-sku','inv-item-category'];
+    fields.forEach(id => document.getElementById(id).value = '');
+    document.getElementById('inv-item-qty').value = 0;
+    document.getElementById('inv-item-cost').value = '';
+    document.getElementById('inv-item-price').value = '';
+    document.getElementById('inv-item-reorder').value = 0;
+    const card = document.getElementById('inventory-item-card');
+    const nameField = document.getElementById('inv-item-name');
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      card.classList.add('highlight-card');
+      setTimeout(() => card.classList.remove('highlight-card'), 2000);
+    }
+    setTimeout(() => nameField.focus(), 250);
+  }
+
+  function connectGmail() {
+    if (DB.google.connected) {
+      if (confirm('Disconnect company Gmail?')) {
+        DB.google.connected = false;
+        DB.google.email = '';
+        saveDB();
+        renderAll();
+        auditLog('Google Gmail disconnected');
+      }
+      return;
+    }
+    const em = prompt('Company Gmail to connect (e.g. centoroenterprise@gmail.com):');
+    if (!em) return;
+    DB.google.connected = true;
+    DB.google.email = em;
+    saveDB();
+    renderAll();
+    logActivity('connected company Gmail ' + em, 'link', 'success');
+    auditLog('Google Gmail connected', em);
+    alert('✅ Gmail connected. Add your Docs/Sheets below — full drive sync activates with the Google API in your backend.');
+  }
+
+  function openGdocModal() {
+    ['gd-name','gd-url'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('gdoc-modal').classList.add('active');
+  }
+
+  function saveGdoc() {
+    const name = document.getElementById('gd-name').value.trim();
+    const url = document.getElementById('gd-url').value.trim();
+    if (!name || !url) { alert('Name and link required'); return; }
+    DB.google.docs.push({
+      id: nextId('GDC', 'google.docs'),
+      name,
+      type: document.getElementById('gd-type').value,
+      url,
+      sharedWith: [],
+      addedAt: new Date().toISOString().slice(0, 10)
+    });
+    saveDB();
+    closeM('gdoc-modal');
+    renderAll();
+    logActivity('added Google doc ' + name, 'file-text', 'info');
+    auditLog('Google doc added', name);
+  }
+
+  function embedUrl(u) { return u.replace('/edit', '/preview').replace(/\/(preview|edit)#.*$/, '/preview'); }
+
+  function openEmbed(id) {
+    const d = DB.google.docs.find(x => x.id === id);
+    if (!d) return;
+    document.getElementById('embed-title').textContent = d.name;
+    document.getElementById('embed-frame').src = embedUrl(d.url);
+    document.getElementById('embed-open').onclick = () => window.open(d.url, '_blank');
+    document.getElementById('embed-modal').classList.add('active');
+  }
+
+  function openShare(id) {
+    shareTarget = id;
+    const d = DB.google.docs.find(x => x.id === id);
+    document.getElementById('share-doc-name').textContent = 'Share "' + d.name + '" with:';
+    document.getElementById('share-staff').innerHTML = DB.staff.map(s => `<label style="display:flex;gap:8px;align-items:center;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:.85rem;"><input type="checkbox" value="${s.id}" ${d.sharedWith.includes(s.id) ? 'checked' : ''} style="accent-color:var(--primary);"> ${s.name} <small style="color:var(--text-muted);">(${s.role})</small></label>`).join('');
+    document.getElementById('share-modal').classList.add('active');
+  }
+
+  function saveShare() {
+    const d = DB.google.docs.find(x => x.id === shareTarget);
+    if (!d) return;
+    d.sharedWith = [...document.querySelectorAll('#share-staff input:checked')].map(i => i.value);
+    saveDB();
+    closeM('share-modal');
+    renderAll();
+    logActivity(`shared ${d.name} with ${d.sharedWith.length} staff`, 'share-2', 'info');
+    auditLog('Google doc shared', d.name);
+    alert('✅ Shared. CC\'d staff will see it on their dashboard once role-based views go live.');
+  }
+
+  function removeGdoc(id) {
+    if (!confirm('Remove this doc from the panel?')) return;
+    const d = DB.google.docs.find(x => x.id === id);
+    DB.google.docs = DB.google.docs.filter(x => x.id !== id);
+    saveDB();
+    renderAll();
+    auditLog('Google doc removed', d ? d.name : id);
+  }
+
+  function openReminderModal(invoiceId) {
+    const inv = DB.invoices.find(i => i.id === invoiceId);
+    if (!inv) return;
+    reminderInvoiceId = invoiceId;
+    const c = getClient(inv.clientId);
+    const today = new Date();
+    const days = Math.floor((today - new Date(inv.dueDate)) / 86400000);
+    const amountDue = inv.total - inv.paid;
+    document.getElementById('rem-client').textContent = c ? c.name : 'Unknown client';
+    document.getElementById('rem-contact').textContent = c ? `${c.email || '—'} · ${c.phone || '—'}` : '—';
+    document.getElementById('rem-invoice').textContent = `#${inv.trackingNumber}`;
+    document.getElementById('rem-due').textContent = fmtDate(inv.dueDate);
+    document.getElementById('rem-amount').textContent = fmtZAR(amountDue);
+    document.getElementById('rem-status').textContent = days > 0 ? `Overdue by ${days} day(s)` : `Due in ${Math.abs(days)} day(s)`;
+    document.getElementById('rem-message').value = `Dear ${c ? c.name : 'Client'},\n\nThis is a friendly reminder from Centoro Enterprise regarding invoice #${inv.trackingNumber} for ${fmtZAR(amountDue)}, due ${fmtDate(inv.dueDate)}.\n\nPlease arrange payment at your earliest convenience.\n\nBank: FNB Business Cheque\nAccount: MR CH HEIDEMAN T/A CENTORO\nAccount No: 63164991044\nBranch: 250655\nReference: ${inv.trackingNumber}\n\nThank you.\nCentoro Enterprise`;
+    document.getElementById('reminder-modal').classList.add('active');
+  }
+
+  function copyReminderMessage() {
+    const msg = document.getElementById('rem-message').value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).then(() => alert('Reminder message copied.'));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = msg;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('Reminder message copied.');
+    }
+  }
+
+  function markReminderSent() {
+    const inv = DB.invoices.find(i => i.id === reminderInvoiceId);
+    if (!inv) return;
+    DB.reminders.push({
+      id: nextId('REM', 'reminders'),
+      invoiceId: inv.id,
+      trackingNumber: inv.trackingNumber,
+      clientId: inv.clientId,
+      message: document.getElementById('rem-message').value,
+      sentAt: new Date().toISOString()
+    });
+    inv.lastReminderDate = new Date().toISOString().slice(0,10);
+    saveDB();
+    auditLog('Payment reminder sent', `#${inv.trackingNumber}`);
+    closeM('reminder-modal');
+    renderAll();
+    alert('Reminder logged as sent.');
+  }
+
+  function toggleExpenseOther() {
+    document.getElementById('exp-other-wrap').style.display = document.getElementById('exp-category').value === 'Other' ? 'block' : 'none';
+  }
+
+  function openExpenseModal() {
+    document.getElementById('exp-date').valueAsDate = new Date();
+    document.getElementById('exp-project').innerHTML = '<option value="">None</option>' + DB.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    document.getElementById('exp-category').value = 'Equipment';
+    document.getElementById('exp-other').value = '';
+    toggleExpenseOther();
+    document.getElementById('expense-modal').classList.add('active');
+  }
+
+  function saveExpense() {
+    const v = document.getElementById('exp-vendor').value.trim();
+    const a = parseFloat(document.getElementById('exp-amount').value);
+    if (!v || !a) { alert('Vendor & amount required'); return; }
+    let category = document.getElementById('exp-category').value;
+    if (category === 'Other') {
+      const other = document.getElementById('exp-other').value.trim();
+      category = other ? `Other: ${other}` : 'Other';
+    }
+    DB.expenses.push({
+      id: nextId('EXP', 'expenses'),
+      vendor: v,
+      description: document.getElementById('exp-desc').value,
+      category,
+      projectId: document.getElementById('exp-project').value || null,
+      amount: a,
+      vatClaimable: parseFloat(document.getElementById('exp-vat').value) || 0,
+      date: document.getElementById('exp-date').value,
+      status: document.getElementById('exp-status').value
+    });
+    saveDB();
+    closeM('expense-modal');
+    renderAll();
+    auditLog('Expense logged', `${v} — ${fmtZAR(a)}`);
+  }
+
+  function addBudgetForm() {
+    const cat = document.getElementById('budget-cat').value.trim();
+    const amt = parseFloat(document.getElementById('budget-amount').value);
+    if (!cat || isNaN(amt) || amt <= 0) { alert('Budget category and amount are required.'); return; }
+    DB.budgets.push({ id: nextId('BDG', 'budgets'), category: cat, annual: amt });
+    saveDB();
+    document.getElementById('budget-cat').value = '';
+    document.getElementById('budget-amount').value = '';
+    renderAll();
+    auditLog('Budget added', `${cat} — ${fmtZAR(amt)}`);
+  }
+
+  function deleteBudget(id) {
+    if (!confirm('Delete this budget?')) return;
+    DB.budgets = DB.budgets.filter(b => b.id !== id);
+    saveDB();
+    renderAll();
+    auditLog('Budget deleted', id);
+  }
+
+  function accountOptions(selected = '') {
+    return DB.chartAccounts.map(a => `<option value="${a.name}" ${selected === a.name ? 'selected' : ''}>${a.name}</option>`).join('');
+  }
+
+  function expenseAccount(cat) {
+    if (String(cat).startsWith('Other:')) return 'General Expense';
+    const map = { Software: 'Software Expense', Marketing: 'Marketing Expense', Utilities: 'Utilities Expense', Rent: 'Rent Expense', Office: 'General Expense', Travel: 'General Expense', Tax: 'General Expense', Equipment: 'Equipment' };
+    return map[cat] || 'General Expense';
+  }
+
+  function postCashbookToLedger() {
+    let added = 0;
+    DB.payments.forEach(p => {
+      if (DB.journalEntries.some(j => j.sourceId === p.id)) return;
+      DB.journalEntries.push({
+        id: nextId('JRN', 'journalEntries'),
+        date: p.date,
+        description: `Receipt ${p.reference || ''}`.trim(),
+        reference: p.reference || p.id,
+        sourceId: p.id,
+        lines: [
+          { account: 'FNB Business Cheque', debit: Number(p.amount) || 0, credit: 0 },
+          { account: 'Sales Income', debit: 0, credit: Number(p.amount) || 0 }
+        ]
+      });
+      added++;
+    });
+    DB.expenses.filter(e => e.status === 'approved').forEach(e => {
+      if (DB.journalEntries.some(j => j.sourceId === e.id)) return;
+      const acc = expenseAccount(e.category);
+      DB.journalEntries.push({
+        id: nextId('JRN', 'journalEntries'),
+        date: e.date,
+        description: `Payment: ${e.vendor} — ${e.description}`.trim(),
+        reference: e.id,
+        sourceId: e.id,
+        lines: [
+          { account: acc, debit: Number(e.amount) || 0, credit: 0 },
+          { account: 'FNB Business Cheque', debit: 0, credit: Number(e.amount) || 0 }
+        ]
+      });
+      added++;
+    });
+    saveDB();
+    renderAll();
+    auditLog('Cashbook posted to general ledger', `${added} entries added`);
+    alert(`Posted ${added} journal entries to the ledger.`);
+  }
+
+  function saveJournal() {
+    const date = document.getElementById('jrn-date').value || new Date().toISOString().slice(0,10);
+    const description = document.getElementById('jrn-desc').value.trim();
+    const reference = document.getElementById('jrn-ref').value.trim();
+    const debitAccount = document.getElementById('jrn-debit').value;
+    const creditAccount = document.getElementById('jrn-credit').value;
+    const amount = parseFloat(document.getElementById('jrn-amount').value) || 0;
+    if (!description || !amount || amount <= 0) { alert('Description and amount are required.'); return; }
+    if (debitAccount === creditAccount) { alert('Debit and credit accounts must be different.'); return; }
+    DB.journalEntries.push({
+      id: nextId('JRN', 'journalEntries'),
+      date,
+      description,
+      reference,
+      sourceId: 'MANUAL-' + Date.now(),
+      lines: [
+        { account: debitAccount, debit: amount, credit: 0 },
+        { account: creditAccount, debit: 0, credit: amount }
+      ]
+    });
+    saveDB();
+    auditLog('Manual journal entry added', `${debitAccount} / ${creditAccount} — ${fmtZAR(amount)}`);
+    document.getElementById('jrn-desc').value = '';
+    document.getElementById('jrn-ref').value = '';
+    document.getElementById('jrn-amount').value = '';
+    renderAll();
+  }
+
+  function renderLedger() {
+    document.getElementById('jrn-debit').innerHTML = accountOptions();
+    document.getElementById('jrn-credit').innerHTML = accountOptions();
+    if (!document.getElementById('jrn-date').value) document.getElementById('jrn-date').value = new Date().toISOString().slice(0,10);
+    const rows = [];
+    [...DB.journalEntries].sort((a,b) => (a.date||'').localeCompare(b.date||'')).forEach(j => {
+      j.lines.forEach(l => rows.push({ ...j, account: l.account, debit: l.debit, credit: l.credit }));
+    });
+    let totalDr = 0, totalCr = 0;
+    document.getElementById('ledger-table').innerHTML = rows.map(r => {
+      totalDr += Number(r.debit) || 0;
+      totalCr += Number(r.credit) || 0;
+      return `<tr><td>${fmtDate(r.date)}</td><td>${r.reference || '—'}</td><td>${r.description}</td><td>${r.account}</td><td>${r.debit ? fmtZAR(r.debit) : ''}</td><td>${r.credit ? fmtZAR(r.credit) : ''}</td></tr>`;
+    }).join('') + `<tr><td colspan="4"><strong>Totals</strong></td><td><strong>${fmtZAR(totalDr)}</strong></td><td><strong>${fmtZAR(totalCr)}</strong></td></tr>` || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No ledger entries yet.</td></tr>';
+  }
+
+  function getAccountBalances() {
+    const balances = {};
+    DB.journalEntries.forEach(j => {
+      j.lines.forEach(l => {
+        balances[l.account] = (balances[l.account] || 0) + (Number(l.debit) || 0) - (Number(l.credit) || 0);
+      });
+    });
+    return balances;
+  }
+
+  function accountType(name) {
+    const acc = DB.chartAccounts.find(a => a.name === name);
+    if (acc) return acc.type;
+    if (/income|sales/i.test(name)) return 'income';
+    if (/expense|cost|salary|wage|rent|software|marketing|utilities|bank charges|general/i.test(name)) return 'expense';
+    if (/creditor|loan|vat payable|liability/i.test(name)) return 'liability';
+    if (/equity|capital|retained/i.test(name)) return 'equity';
+    return 'asset';
+  }
+
+  function showTrialBalance() {
+    const balances = getAccountBalances();
+    let dr = 0, cr = 0;
+    const rows = Object.entries(balances).map(([account, balance]) => {
+      const debit = balance > 0 ? balance : 0;
+      const credit = balance < 0 ? Math.abs(balance) : 0;
+      dr += debit;
+      cr += credit;
+      return `<tr><td>${account}</td><td style="text-align:right;">${debit ? fmtZAR(debit) : ''}</td><td style="text-align:right;">${credit ? fmtZAR(credit) : ''}</td></tr>`;
+    }).join('');
+    const el = document.getElementById('ledger-extra');
+    el.style.display = 'block';
+    el.innerHTML = `<h3 style="margin-bottom:12px;">Trial Balance</h3><table><thead><tr><th>Account</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th></tr></thead><tbody>${rows}<tr><td><strong>Totals</strong></td><td style="text-align:right;"><strong>${fmtZAR(dr)}</strong></td><td style="text-align:right;"><strong>${fmtZAR(cr)}</strong></td></tr></tbody></table>`;
+  }
+
+  function printTrialBalance() {
+    const el = document.getElementById('ledger-extra');
+    if (!el.innerHTML || el.style.display === 'none') { showTrialBalance(); }
+    printHtml('Trial Balance', el.innerHTML);
+  }
+
+  function printLedger() {
+    const rows = [];
+    [...DB.journalEntries].sort((a,b) => (a.date||'').localeCompare(b.date||'')).forEach(j => {
+      j.lines.forEach(l => rows.push({ date: j.date, reference: j.reference, description: j.description, account: l.account, debit: l.debit, credit: l.credit }));
+    });
+    const html = `<table><thead><tr><th>Date</th><th>Ref</th><th>Description</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead><tbody>${rows.map(r => `<tr><td>${fmtDateDMY(r.date)}</td><td>${r.reference || ''}</td><td>${r.description}</td><td>${r.account}</td><td>${r.debit ? Number(r.debit).toFixed(2) : ''}</td><td>${r.credit ? Number(r.credit).toFixed(2) : ''}</td></tr>`).join('')}</tbody></table>`;
+    printHtml('General Ledger', html);
+  }
+
+  function renderStatement(type) {
+    const balances = getAccountBalances();
+    const out = document.getElementById('statement-output');
+    if (!DB.journalEntries.length) {
+      out.innerHTML = 'No journal entries found. Use "Post Cashbook to Ledger" or add manual journal entries first.';
+      return;
+    }
+    if (type === 'pl') {
+      const income = [], expense = [];
+      let incomeTotal = 0, expenseTotal = 0;
+      Object.entries(balances).forEach(([account, balance]) => {
+        const t = accountType(account);
+        if (t === 'income' && balance < 0) { const amt = Math.abs(balance); income.push({ account, amt }); incomeTotal += amt; }
+        if (t === 'expense' && balance > 0) { expense.push({ account, amt: balance }); expenseTotal += balance; }
+      });
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Profit & Loss Statement</h3><table><thead><tr><th>Income</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${income.map(i => `<tr><td>${i.account}</td><td style="text-align:right;">${fmtZAR(i.amt)}</td></tr>`).join('') || '<tr><td>No income posted</td><td></td></tr>'}<tr><td><strong>Total Income</strong></td><td style="text-align:right;"><strong>${fmtZAR(incomeTotal)}</strong></td></tr></tbody></table><br><table><thead><tr><th>Expenses</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${expense.map(e => `<tr><td>${e.account}</td><td style="text-align:right;">${fmtZAR(e.amt)}</td></tr>`).join('') || '<tr><td>No expenses posted</td><td></td></tr>'}<tr><td><strong>Total Expenses</strong></td><td style="text-align:right;"><strong>${fmtZAR(expenseTotal)}</strong></td></tr><tr><td><strong>Net Profit</strong></td><td style="text-align:right;"><strong>${fmtZAR(incomeTotal - expenseTotal)}</strong></td></tr></tbody></table>`;
+    }
+    if (type === 'balance') {
+      const assets = [], liabilities = [], equity = [];
+      let assetTotal = 0, liabilityTotal = 0, equityTotal = 0;
+      let netIncome = 0;
+      Object.entries(balances).forEach(([account, balance]) => {
+        const t = accountType(account);
+        if (t === 'income' && balance < 0) netIncome += Math.abs(balance);
+        if (t === 'expense' && balance > 0) netIncome -= balance;
+      });
+      Object.entries(balances).forEach(([account, balance]) => {
+        const t = accountType(account);
+        if (t === 'asset' && balance !== 0) { assets.push({ account, amt: balance }); assetTotal += balance; }
+        if (t === 'liability' && balance !== 0) { liabilities.push({ account, amt: Math.abs(balance) }); liabilityTotal += Math.abs(balance); }
+        if (t === 'equity' && balance !== 0) { equity.push({ account, amt: Math.abs(balance) }); equityTotal += Math.abs(balance); }
+      });
+      equity.push({ account: 'Net Income (current period)', amt: netIncome });
+      equityTotal += netIncome;
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Balance Sheet</h3><table><thead><tr><th>Assets</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${assets.map(a => `<tr><td>${a.account}</td><td style="text-align:right;">${fmtZAR(a.amt)}</td></tr>`).join('') || '<tr><td>No assets posted</td><td></td></tr>'}<tr><td><strong>Total Assets</strong></td><td style="text-align:right;"><strong>${fmtZAR(assetTotal)}</strong></td></tr></tbody></table><br><table><thead><tr><th>Liabilities</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${liabilities.map(l => `<tr><td>${l.account}</td><td style="text-align:right;">${fmtZAR(l.amt)}</td></tr>`).join('') || '<tr><td>No liabilities posted</td><td></td></tr>'}<tr><td><strong>Total Liabilities</strong></td><td style="text-align:right;"><strong>${fmtZAR(liabilityTotal)}</strong></td></tr></tbody></table><br><table><thead><tr><th>Equity</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${equity.map(e => `<tr><td>${e.account}</td><td style="text-align:right;">${fmtZAR(e.amt)}</td></tr>`).join('')}<tr><td><strong>Total Equity</strong></td><td style="text-align:right;"><strong>${fmtZAR(equityTotal)}</strong></td></tr><tr><td><strong>Liabilities + Equity</strong></td><td style="text-align:right;"><strong>${fmtZAR(liabilityTotal + equityTotal)}</strong></td></tr></tbody></table>`;
+    }
+    if (type === 'cashflow') {
+      const cashAccounts = Object.entries(balances).filter(([account]) => /bank|cash|fnb/i.test(account));
+      const net = cashAccounts.reduce((s, [, b]) => s + b, 0);
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Cash Flow Statement (Simple Ledger Basis)</h3><table><thead><tr><th>Cash / Bank Account</th><th style="text-align:right;">Net Movement</th></tr></thead><tbody>${cashAccounts.map(([account, balance]) => `<tr><td>${account}</td><td style="text-align:right;">${fmtZAR(balance)}</td></tr>`).join('') || '<tr><td>No cash/bank ledger activity</td><td></td></tr>'}<tr><td><strong>Net Cash Movement</strong></td><td style="text-align:right;"><strong>${fmtZAR(net)}</strong></td></tr></tbody></table><p style="margin-top:12px;color:var(--text-muted);font-size:.8rem;">For full operating/investing/financing cash flow classification, ledger accounts must be mapped to cash-flow categories in the backend.</p>`;
+    }
+  }
+
+  function printStatement() {
+    const html = document.getElementById('statement-output').innerHTML;
+    if (!html || html.includes('Select a statement')) { alert('Generate a statement first.'); return; }
+    printHtml('Financial Statement', html);
+  }
+
+  function agingBucket(days) {
+    if (days <= 0) return 'Current';
+    if (days <= 30) return '1-30 Days';
+    if (days <= 60) return '31-60 Days';
+    if (days <= 90) return '61-90 Days';
+    return '90+ Days';
+  }
+
+  function renderAR() {
+    const today = new Date();
+    const open = DB.invoices.filter(i => i.status !== 'paid');
+    let current = 0, d30 = 0, d60 = 0, d90 = 0, d90plus = 0;
+    const rows = open.map(i => {
+      const due = new Date(i.dueDate);
+      const days = Math.floor((today - due) / 86400000);
+      const outstanding = Number(i.total || 0) - Number(i.paid || 0);
+      const bucket = agingBucket(days);
+      if (bucket === 'Current') current += outstanding;
+      if (bucket === '1-30 Days') d30 += outstanding;
+      if (bucket === '31-60 Days') d60 += outstanding;
+      if (bucket === '61-90 Days') d90 += outstanding;
+      if (bucket === '90+ Days') d90plus += outstanding;
+      return `<tr><td>#${i.trackingNumber}</td><td>${getClient(i.clientId) ? getClient(i.clientId).name : '—'}</td><td>${fmtDate(i.dueDate)}</td><td>${days > 0 ? days + ' days' : 'Not due yet'}</td><td>${fmtZAR(outstanding)}</td><td><span class="badge badge-${days > 90 ? 'danger' : days > 30 ? 'warning' : 'success'}">${bucket}</span></td></tr>`;
+    }).join('');
+    document.getElementById('ar-stats').innerHTML = `
+      <div class="stat-card green"><div class="stat-label">Current</div><div class="stat-value">${fmtZAR(current)}</div></div>
+      <div class="stat-card"><div class="stat-label">1-30 Days</div><div class="stat-value">${fmtZAR(d30)}</div></div>
+      <div class="stat-card"><div class="stat-label">31-60 Days</div><div class="stat-value">${fmtZAR(d60)}</div></div>
+      <div class="stat-card"><div class="stat-label">61-90 Days</div><div class="stat-value">${fmtZAR(d90)}</div></div>
+      <div class="stat-card red"><div class="stat-label">90+ Days</div><div class="stat-value">${fmtZAR(d90plus)}</div></div>
+    `;
+    document.getElementById('ar-table').innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No open debtors.</td></tr>';
+  }
+
+  function savePayable() {
+    const supplier = document.getElementById('ap-supplier').value.trim();
+    const description = document.getElementById('ap-desc').value.trim();
+    const amount = parseFloat(document.getElementById('ap-amount').value) || 0;
+    const vat = parseFloat(document.getElementById('ap-vat').value) || 0;
+    const due = document.getElementById('ap-due').value;
+    const status = document.getElementById('ap-status').value;
+    if (!supplier || !amount) { alert('Supplier and amount are required.'); return; }
+    DB.payables.push({
+      id: nextId('AP', 'payables'),
+      supplier,
+      description,
+      amount,
+      vat,
+      dueDate: due || new Date().toISOString().slice(0,10),
+      status,
+      createdAt: new Date().toISOString()
+    });
+    saveDB();
+    auditLog('Payable added', `${supplier} — ${fmtZAR(amount)}`);
+    document.getElementById('ap-supplier').value = '';
+    document.getElementById('ap-desc').value = '';
+    document.getElementById('ap-amount').value = '';
+    document.getElementById('ap-vat').value = '';
+    document.getElementById('ap-status').value = 'unpaid';
+    renderAll();
+  }
+
+  function markPayablePaid(id) {
+    const p = DB.payables.find(x => x.id === id);
+    if (!p) return;
+    p.status = 'paid';
+    p.paidDate = new Date().toISOString().slice(0,10);
+    saveDB();
+    auditLog('Payable paid', `${p.supplier} — ${fmtZAR(p.amount)}`);
+    renderAll();
+  }
+
+  function renderAP() {
+    if (!document.getElementById('ap-due').value) document.getElementById('ap-due').value = new Date().toISOString().slice(0,10);
+    document.getElementById('ap-table').innerHTML = DB.payables.map(p => `<tr>
+      <td><strong>${p.supplier}</strong></td>
+      <td>${p.description || '—'}</td>
+      <td>${fmtDate(p.dueDate)}</td>
+      <td>${fmtZAR(p.amount)}</td>
+      <td>${fmtZAR(p.vat || 0)}</td>
+      <td><span class="badge badge-${p.status === 'paid' ? 'success' : 'warning'}">${p.status}</span></td>
+      <td>${p.status !== 'paid' ? `<button class="btn btn-success" onclick="markPayablePaid('${p.id}')">Mark Paid</button>` : ''}</td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">No payables captured.</td></tr>';
+  }
+
+  function saveBankTransaction() {
+    const date = document.getElementById('bank-date').value || new Date().toISOString().slice(0,10);
+    const description = document.getElementById('bank-desc').value.trim();
+    const type = document.getElementById('bank-type').value;
+    const amount = parseFloat(document.getElementById('bank-amount').value) || 0;
+    const reference = document.getElementById('bank-ref').value.trim();
+    if (!description || !amount || amount <= 0) { alert('Description and amount are required.'); return; }
+    DB.bankTransactions.push({
+      id: nextId('BNK', 'bankTransactions'),
+      date,
+      description,
+      type,
+      amount,
+      reference,
+      reconciled: false
+    });
+    saveDB();
+    auditLog('Bank statement line added', `${description} — ${fmtZAR(amount)}`);
+    document.getElementById('bank-desc').value = '';
+    document.getElementById('bank-amount').value = '';
+    document.getElementById('bank-ref').value = '';
+    renderAll();
+  }
+
+  function toggleBankMatch(id) {
+    const b = DB.bankTransactions.find(x => x.id === id);
+    if (!b) return;
+    b.reconciled = !b.reconciled;
+    saveDB();
+    auditLog(b.reconciled ? 'Bank line matched' : 'Bank line unmatched', `${b.description} — ${fmtZAR(b.amount)}`);
+    renderAll();
+  }
+
+  function renderBankRec() {
+    if (!document.getElementById('bank-date').value) document.getElementById('bank-date').value = new Date().toISOString().slice(0,10);
+    const statementBalance = DB.bankTransactions.reduce((s,b) => s + (b.type === 'deposit' ? Number(b.amount) : -Number(b.amount)), 0);
+    const cashRowsNow = getCashBook();
+    const cashbookBalance = cashRowsNow.length ? cashRowsNow[cashRowsNow.length - 1].balance : 0;
+    const reconciledBalance = DB.bankTransactions.filter(b => b.reconciled).reduce((s,b) => s + (b.type === 'deposit' ? Number(b.amount) : -Number(b.amount)), 0);
+    const difference = statementBalance - cashbookBalance;
+    document.getElementById('bankrec-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Bank Statement Balance</div><div class="stat-value">${fmtZAR(statementBalance)}</div></div>
+      <div class="stat-card green"><div class="stat-label">Cash Book Balance</div><div class="stat-value">${fmtZAR(cashbookBalance)}</div></div>
+      <div class="stat-card blue"><div class="stat-label">Cleared / Matched</div><div class="stat-value">${fmtZAR(reconciledBalance)}</div></div>
+      <div class="stat-card ${difference ? 'red' : 'green'}"><div class="stat-label">Difference</div><div class="stat-value">${fmtZAR(difference)}</div></div>
+    `;
+    document.getElementById('bankrec-table').innerHTML = DB.bankTransactions.map(b => `<tr>
+      <td>${fmtDate(b.date)}</td>
+      <td>${b.description}</td>
+      <td>${b.reference || '—'}</td>
+      <td>${b.type}</td>
+      <td>${fmtZAR(b.amount)}</td>
+      <td><span class="badge badge-${b.reconciled ? 'success' : 'warning'}">${b.reconciled ? 'Matched' : 'Unmatched'}</span></td>
+      <td><button class="btn btn-secondary" onclick="toggleBankMatch('${b.id}')">${b.reconciled ? 'Unmatch' : 'Match'}</button></td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">No bank statement lines yet.</td></tr>';
+  }
+
+  function saveInventoryItem() {
+    const name = document.getElementById('inv-item-name').value.trim();
+    const sku = document.getElementById('inv-item-sku').value.trim();
+    const category = document.getElementById('inv-item-category').value.trim();
+    const qty = parseInt(document.getElementById('inv-item-qty').value) || 0;
+    const cost = parseFloat(document.getElementById('inv-item-cost').value) || 0;
+    const price = parseFloat(document.getElementById('inv-item-price').value) || 0;
+    const reorder = parseInt(document.getElementById('inv-item-reorder').value) || 0;
+    if (!name) { alert('Item name is required.'); return; }
+    DB.inventory.push({ id: nextId('ITM', 'inventory'), name, sku, category, qty, cost, price, reorder });
+    saveDB();
+    auditLog('Inventory item added', name);
+    prepareNewItem();
+    renderAll();
+  }
+
+  function saveStockMovement() {
+    const itemId = document.getElementById('mov-item').value;
+    const type = document.getElementById('mov-type').value;
+    const qty = parseInt(document.getElementById('mov-qty').value) || 0;
+    const ref = document.getElementById('mov-ref').value.trim();
+    const item = DB.inventory.find(i => i.id === itemId);
+    if (!item) { alert('Select an inventory item.'); return; }
+    if (!qty || qty <= 0) { alert('Quantity must be greater than 0.'); return; }
+    if (type === 'sale' && qty > item.qty) { alert('Not enough stock for this sale.'); return; }
+    if (type === 'purchase') item.qty += qty;
+    if (type === 'sale') item.qty -= qty;
+    if (type === 'adjustment') item.qty += qty;
+    DB.stockMovements.push({
+      id: nextId('STM', 'stockMovements'),
+      itemId,
+      itemName: item.name,
+      type,
+      qty,
+      reference: ref,
+      costValue: qty * item.cost,
+      date: new Date().toISOString().slice(0,10)
+    });
+    saveDB();
+    auditLog('Stock movement saved', `${item.name} — ${type} x ${qty}`);
+    document.getElementById('mov-qty').value = 1;
+    document.getElementById('mov-ref').value = '';
+    renderAll();
+  }
+
+  function renderInventory() {
+    document.getElementById('mov-item').innerHTML = DB.inventory.map(i => `<option value="${i.id}">${i.name}</option>`).join('') || '<option value="">No inventory items</option>';
+    const cogs = DB.stockMovements.filter(m => m.type === 'sale').reduce((s,m) => s + Number(m.costValue || 0), 0);
+    document.getElementById('cogs-summary').innerHTML = `<strong>Cost of Goods Sold:</strong> ${fmtZAR(cogs)}`;
+    document.getElementById('inventory-table').innerHTML = DB.inventory.map(i => `<tr>
+      <td><strong>${i.name}</strong></td>
+      <td>${i.sku || '—'}</td>
+      <td>${i.category || '—'}</td>
+      <td>${i.qty}</td>
+      <td>${fmtZAR(i.cost)}</td>
+      <td>${fmtZAR(i.price)}</td>
+      <td>${fmtZAR(i.qty * i.cost)}</td>
+      <td><span class="badge badge-${i.qty <= i.reorder ? 'danger' : 'success'}">${i.qty <= i.reorder ? 'Reorder' : 'In Stock'}</span></td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">No inventory items yet.</td></tr>';
+    document.getElementById('stock-movements-table').innerHTML = DB.stockMovements.map(m => `<tr>
+      <td>${fmtDate(m.date)}</td>
+      <td>${m.itemName}</td>
+      <td>${m.type}</td>
+      <td>${m.qty}</td>
+      <td>${m.reference || '—'}</td>
+      <td>${m.type === 'sale' ? fmtZAR(m.costValue) : '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No stock movements yet.</td></tr>';
+  }
+
+  function populateQuoteClients(selected = '') {
+    const sel = document.getElementById('quote-client');
+    sel.innerHTML = '<option value="">Select...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (selected) sel.value = selected;
+  }
+
+  function quickAddQuoteClient() {
+    const name = document.getElementById('qc-name').value.trim();
+    const email = document.getElementById('qc-email').value.trim();
+    const phone = document.getElementById('qc-phone').value.trim();
+    if (!name) { alert('Client name is required.'); return; }
+    const client = {
+      id: nextId('CLT', 'clients'),
+      code: generateClientCode(name),
+      name,
+      email,
+      phone,
+      address: '',
+      totalSpent: 0,
+      projects: 0,
+      status: 'active'
+    };
+    DB.clients.push(client);
+    saveDB();
+    populateQuoteClients(client.id);
+    populatePaySelects();
+    auditLog('Client added from Quotes', name);
+    document.getElementById('qc-name').value = '';
+    document.getElementById('qc-email').value = '';
+    document.getElementById('qc-phone').value = '';
+  }
+
+  function saveQuote() {
+    const clientId = document.getElementById('quote-client').value;
+    const description = document.getElementById('quote-desc').value.trim();
+    const amount = parseFloat(document.getElementById('quote-amount').value) || 0;
+    const discountPct = parseFloat(document.getElementById('quote-discount').value) || 0;
+    const validUntil = document.getElementById('quote-valid').value;
+    if (!clientId || !description || !amount) { alert('Client, description and amount are required.'); return; }
+    const discountAmount = amount * discountPct / 100;
+    const total = amount - discountAmount;
+    DB.quotes.push({
+      id: nextId('QTE', 'quotes'),
+      clientId,
+      description,
+      amount,
+      discountPct,
+      discountAmount,
+      total,
+      validUntil,
+      status: 'draft',
+      date: new Date().toISOString().slice(0,10)
+    });
+    if (discountPct > 0) {
+      DB.discounts.push({
+        id: nextId('DSC', 'discounts'),
+        date: new Date().toISOString().slice(0,10),
+        ref: 'Quote ' + description,
+        clientId,
+        description,
+        discountPct,
+        discountAmount,
+        source: 'quote'
+      });
+    }
+    saveDB();
+    auditLog('Quote created', `${description} — ${fmtZAR(total)}`);
+    document.getElementById('quote-desc').value = '';
+    document.getElementById('quote-amount').value = '';
+    document.getElementById('quote-discount').value = 0;
+    renderAll();
+  }
+
+  function setQuoteStatus(id, status) {
+    const q = DB.quotes.find(x => x.id === id);
+    if (!q) return;
+    q.status = status;
+    saveDB();
+    auditLog(`Quote marked ${status}`, q.description);
+    renderAll();
+  }
+
+  function convertQuote(id) {
+    const q = DB.quotes.find(x => x.id === id);
+    if (!q) return;
+    if (q.status === 'converted') { alert('Quote already converted.'); return; }
+    const today = new Date().toISOString().slice(0,10);
+    const due = q.validUntil && q.validUntil >= today ? q.validUntil : new Date(Date.now() + 30 * 86400000).toISOString().slice(0,10);
+    const invoice = {
+      id: nextId('INV', 'invoices'),
+      trackingNumber: generateTrackingNumber(q.clientId, today),
+      clientId: q.clientId,
+      projectId: null,
+      service: 'Quote Conversion',
+      items: [{ qty: 1, description: q.description, unitPrice: q.amount }],
+      subtotal: q.amount,
+      discountPct: q.discountPct || 0,
+      vat: 0,
+      total: q.total,
+      paid: 0,
+      status: 'unpaid',
+      issueDate: today,
+      dueDate: due
+    };
+    DB.invoices.push(invoice);
+    q.status = 'converted';
+    q.invoiceId = invoice.id;
+    saveDB();
+    auditLog('Quote converted to invoice', `#${invoice.trackingNumber}`);
+    renderAll();
+    alert(`Quote converted to invoice #${invoice.trackingNumber}.`);
+  }
+
+  function renderQuotes() {
+    populateQuoteClients();
+    if (!document.getElementById('quote-valid').value) {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      document.getElementById('quote-valid').value = d.toISOString().slice(0,10);
+    }
+    document.getElementById('quotes-table').innerHTML = DB.quotes.map(q => {
+      const c = getClient(q.clientId);
+      return `<tr>
+        <td>${fmtDate(q.date)}</td>
+        <td>${c ? c.name : '—'}</td>
+        <td>${q.description}</td>
+        <td>${fmtZAR(q.amount)}</td>
+        <td>${Number(q.discountPct || 0)}%</td>
+        <td>${fmtZAR(q.total)}</td>
+        <td>${fmtDate(q.validUntil)}</td>
+        <td><span class="badge badge-${q.status === 'converted' ? 'success' : q.status === 'accepted' ? 'info' : q.status === 'sent' ? 'warning' : 'neutral'}">${q.status}</span></td>
+        <td style="white-space:nowrap;">
+          ${q.status !== 'converted' ? `
+            <button class="btn btn-secondary" onclick="setQuoteStatus('${q.id}','sent')">Sent</button>
+            <button class="btn btn-secondary" onclick="setQuoteStatus('${q.id}','accepted')">Accepted</button>
+            <button class="btn btn-primary" onclick="convertQuote('${q.id}')">Convert</button>
+          ` : ''}
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">No quotes yet.</td></tr>';
+  }
+
+  function ensureCashClient() {
+    let c = DB.clients.find(x => x.name.toLowerCase() === 'cash sale');
+    if (c) return c.id;
+    c = { id: nextId('CLT', 'clients'), code: 'CASH', name: 'Cash Sale', email: '', phone: '', address: '', totalSpent: 0, projects: 0, status: 'active' };
+    DB.clients.push(c);
+    saveDB();
+    return c.id;
+  }
+
+  function generateReceiptRef() { return 'RCT-' + String(DB.payments.length + 1).padStart(4, '0'); }
+
+  function populatePaySelects() {
+    document.getElementById('pay-invoice').innerHTML = '<option value="">Select...</option>' + DB.invoices.filter(i => i.status !== 'paid').map(i => `<option value="${i.id}">#${i.trackingNumber} — ${fmtZAR(i.total - i.paid)} due</option>`).join('');
+    document.getElementById('pay-client').innerHTML = '<option value="">Select / Cash Sale</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    document.getElementById('pay-service').innerHTML = '<option value="">Select...</option>' + DB.services.map(s => `<option value="${s.id}">${s.name} — ${fmtZAR(s.price)}</option>`).join('');
+    document.getElementById('pay-product').innerHTML = '<option value="">Select...</option>' + DB.inventory.map(i => `<option value="${i.id}">${i.name} — ${fmtZAR(i.price)} — Stock ${i.qty}</option>`).join('');
+  }
+
+  function togglePaySource() {
+    const source = document.getElementById('pay-source').value;
+    document.getElementById('pay-invoice-row').style.display = source === 'invoice' ? 'block' : 'none';
+    document.getElementById('pay-client-row').style.display = source === 'invoice' ? 'none' : 'grid';
+    document.getElementById('pay-client-add-row').style.display = source === 'invoice' ? 'none' : 'block';
+    document.getElementById('pay-service-row').style.display = source === 'service' ? 'block' : 'none';
+    document.getElementById('pay-product-row').style.display = source === 'product' ? 'grid' : 'none';
+    document.getElementById('pay-desc-row').style.display = source === 'invoice' ? 'none' : 'block';
+    document.getElementById('pay-discount').disabled = source === 'invoice';
+    document.getElementById('pay-vat').disabled = source === 'invoice';
+    calcPayTotals();
+  }
+
+  function openPaymentModal() {
+    populatePaySelects();
+    document.getElementById('pay-source').value = 'invoice';
+    document.getElementById('pay-date').valueAsDate = new Date();
+    document.getElementById('pay-method').value = 'EFT';
+    document.getElementById('pay-ref').value = generateReceiptRef();
+    document.getElementById('pay-invoice').value = '';
+    document.getElementById('pay-client').value = '';
+    document.getElementById('pay-new-client-name').value = '';
+    document.getElementById('pay-new-client-email').value = '';
+    document.getElementById('pay-new-client-phone').value = '';
+    document.getElementById('pay-service').value = '';
+    document.getElementById('pay-product').value = '';
+    document.getElementById('pay-qty').value = 1;
+    document.getElementById('pay-desc').value = '';
+    document.getElementById('pay-amount').value = '';
+    document.getElementById('pay-discount').value = 0;
+    document.getElementById('pay-vat').value = 0;
+    document.getElementById('pay-total').value = '';
+    togglePaySource();
+    document.getElementById('payment-modal').classList.add('active');
+  }
+
+  function quickAddReceiptClient() {
+    const name = document.getElementById('pay-new-client-name').value.trim();
+    const email = document.getElementById('pay-new-client-email').value.trim();
+    const phone = document.getElementById('pay-new-client-phone').value.trim();
+    if (!name) { alert('Client name is required.'); return; }
+    const client = {
+      id: nextId('CLT', 'clients'),
+      code: generateClientCode(name),
+      name,
+      email,
+      phone,
+      address: '',
+      totalSpent: 0,
+      projects: 0,
+      status: 'active'
+    };
+    DB.clients.push(client);
+    saveDB();
+    populatePaySelects();
+    populateQuoteClients();
+    document.getElementById('pay-client').value = client.id;
+    auditLog('Client added from Receipts', name);
+    document.getElementById('pay-new-client-name').value = '';
+    document.getElementById('pay-new-client-email').value = '';
+    document.getElementById('pay-new-client-phone').value = '';
+  }
+
+  function fillPayAmt() {
+    const i = DB.invoices.find(x => x.id === document.getElementById('pay-invoice').value);
+    if (i) {
+      document.getElementById('pay-amount').value = (i.total - i.paid).toFixed(2);
+      document.getElementById('pay-desc').value = `Payment for invoice #${i.trackingNumber}`;
+    }
+    calcPayTotals();
+  }
+
+  function payServiceSelected() {
+    const s = getService(document.getElementById('pay-service').value);
+    if (!s) return;
+    document.getElementById('pay-desc').value = s.name;
+    document.getElementById('pay-amount').value = s.price;
+    calcPayTotals();
+  }
+
+  function payProductSelected() {
+    const item = DB.inventory.find(i => i.id === document.getElementById('pay-product').value);
+    if (!item) return;
+    document.getElementById('pay-desc').value = item.name;
+    document.getElementById('pay-amount').value = item.price;
+    calcPayTotals();
+  }
+
+  function calcPayTotals() {
+    const source = document.getElementById('pay-source').value;
+    const qty = source === 'product' ? (parseInt(document.getElementById('pay-qty').value) || 1) : 1;
+    const unit = parseFloat(document.getElementById('pay-amount').value) || 0;
+    const gross = unit * qty;
+    const discPct = parseFloat(document.getElementById('pay-discount').value) || 0;
+    const vatPct = parseFloat(document.getElementById('pay-vat').value) || 0;
+    const disc = gross * discPct / 100;
+    const net = gross - disc;
+    const vat = net * vatPct / 100;
+    const total = net + vat;
+    lastPayTotal = total;
+    document.getElementById('pay-total').value = fmtZAR(total);
+    return total;
+  }
+
+  function savePayment() {
+    const source = document.getElementById('pay-source').value;
+    const date = document.getElementById('pay-date').value || new Date().toISOString().slice(0,10);
+    const method = document.getElementById('pay-method').value;
+    const ref = document.getElementById('pay-ref').value.trim() || generateReceiptRef();
+    if (source === 'invoice') {
+      const invId = document.getElementById('pay-invoice').value;
+      const amt = parseFloat(document.getElementById('pay-amount').value);
+      if (!invId || !amt) { alert('Select invoice & amount'); return; }
+      DB.payments.push({ id: nextId('PAY', 'payments'), invoiceId: invId, amount: amt, method, date, reference: ref, source: 'invoice' });
+      const i = DB.invoices.find(x => x.id === invId);
+      if (i) { i.paid += amt; i.status = i.paid >= i.total ? 'paid' : 'partial'; }
+      saveDB();
+      closeM('payment-modal');
+      renderAll();
+      auditLog('Receipt captured', `#${i ? i.trackingNumber : ''} — ${fmtZAR(amt)}`);
+      return;
+    }
+    const clientId = document.getElementById('pay-client').value || ensureCashClient();
+    const qty = source === 'product' ? (parseInt(document.getElementById('pay-qty').value) || 1) : 1;
+    const unit = parseFloat(document.getElementById('pay-amount').value) || 0;
+    const desc = document.getElementById('pay-desc').value.trim() || (source === 'service' ? 'Service sale' : source === 'product' ? 'Product sale' : 'Other receipt');
+    if (!unit || unit <= 0) { alert('Amount is required.'); return; }
+    if (source === 'product') {
+      const item = DB.inventory.find(i => i.id === document.getElementById('pay-product').value);
+      if (!item) { alert('Select a product / stock item.'); return; }
+      if (qty > item.qty) { alert('Not enough stock for this sale.'); return; }
+    }
+    const gross = unit * qty;
+    const discPct = parseFloat(document.getElementById('pay-discount').value) || 0;
+    const discAmt = gross * discPct / 100;
+    const net = gross - discAmt;
+    const vatPct = parseFloat(document.getElementById('pay-vat').value) || 0;
+    const vatAmt = net * vatPct / 100;
+    const total = net + vatAmt;
+    const invoice = {
+      id: nextId('INV', 'invoices'),
+      trackingNumber: generateTrackingNumber(clientId, date),
+      clientId,
+      projectId: null,
+      service: source === 'service' ? 'Service Sale' : source === 'product' ? 'Product Sale' : 'Other Receipt',
+      items: [{ qty, description: desc, unitPrice: unit }],
+      subtotal: gross,
+      discountPct: discPct,
+      vat: vatAmt,
+      total,
+      paid: total,
+      status: 'paid',
+      issueDate: date,
+      dueDate: date
+    };
+    DB.invoices.push(invoice);
+    DB.payments.push({ id: nextId('PAY', 'payments'), invoiceId: invoice.id, amount: total, method, date, reference: ref, source });
+    if (source === 'product') {
+      const item = DB.inventory.find(i => i.id === document.getElementById('pay-product').value);
+      item.qty -= qty;
+      DB.stockMovements.push({ id: nextId('STM', 'stockMovements'), itemId: item.id, itemName: item.name, type: 'sale', qty, reference: invoice.trackingNumber, costValue: qty * item.cost, date });
+    }
+    if (discPct > 0) {
+      DB.discounts.push({ id: nextId('DSC', 'discounts'), date, ref: invoice.trackingNumber, clientId, description: desc, discountPct: discPct, discountAmount: discAmt, source: 'receipt' });
+    }
+    saveDB();
+    closeM('payment-modal');
+    renderAll();
+    auditLog('Receipt captured', `${invoice.trackingNumber} — ${fmtZAR(total)}`);
+    alert(`Receipt saved and invoice #${invoice.trackingNumber} marked as paid.`);
+  }
+
+  function recordPaymentForInvoice(id) {
+    openPaymentModal();
+    document.getElementById('pay-source').value = 'invoice';
+    togglePaySource();
+    document.getElementById('pay-invoice').value = id;
+    fillPayAmt();
+  }
+
+  function renderAccountingInvoices() {
+    const rows = [...DB.invoices].sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')).map(i => {
+      const c = getClient(i.clientId);
+      const bc = { paid: 'success', partial: 'warning', unpaid: 'danger', overdue: 'danger' }[i.status] || 'neutral';
+      return `<tr>
+        <td><strong>#${i.trackingNumber}</strong></td>
+        <td>${c ? c.name : '—'}</td>
+        <td>${fmtDate(i.issueDate)}</td>
+        <td>${fmtDate(i.dueDate)}</td>
+        <td>${fmtZAR(i.total)}</td>
+        <td>${fmtZAR(i.paid)}</td>
+        <td><span class="badge badge-${bc}">${i.status}</span></td>
+        <td style="white-space:nowrap;">
+          ${i.status !== 'paid' ? `<button class="btn btn-success" onclick="recordPaymentForInvoice('${i.id}')">Record Payment</button>` : ''}
+          <a class="btn btn-secondary" href="admin-invoices.html">Open Invoices</a>
+        </td>
+      </tr>`;
+    }).join('');
+    document.getElementById('accounting-invoices-table').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">No invoices found.</td></tr>';
+  }
+
+  function renderDiscounts() {
+    document.getElementById('discounts-table').innerHTML = DB.discounts.map(d => `<tr>
+      <td>${fmtDate(d.date)}</td>
+      <td>${d.ref}</td>
+      <td>${getClient(d.clientId) ? getClient(d.clientId).name : '—'}</td>
+      <td>${d.description}</td>
+      <td>${Number(d.discountPct || 0)}%</td>
+      <td>${fmtZAR(d.discountAmount || 0)}</td>
+      <td>${d.source}</td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">No discounts recorded yet.</td></tr>';
+  }
+
+  function renderJobCosting() {
+    const rows = DB.projects.map(p => {
+      const client = getClient(p.clientId);
+      const income = DB.invoices.filter(i => i.projectId === p.id).reduce((s,i) => s + Number(i.total || 0), 0);
+      const expenses = DB.expenses.filter(e => e.projectId === p.id).reduce((s,e) => s + Number(e.amount || 0), 0);
+      const labour = DB.jobCards.filter(j => j.projectId === p.id).reduce((s,j) => {
+        const staff = getStaff(j.assigneeId);
+        const hourly = staff && staff.salary ? Number(staff.salary) / 160 : 0;
+        return s + (Number(j.hours) || 0) * hourly;
+      }, 0);
+      const profit = income - expenses - labour;
+      const margin = income ? (profit / income * 100) : 0;
+      return `<tr>
+        <td><strong>${p.name}</strong></td>
+        <td>${client ? client.name : '—'}</td>
+        <td>${fmtZAR(p.budget || 0)}</td>
+        <td>${fmtZAR(income)}</td>
+        <td>${fmtZAR(expenses)}</td>
+        <td>${fmtZAR(labour)}</td>
+        <td style="color:${profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmtZAR(profit)}</td>
+        <td>${margin.toFixed(1)}%</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('jobcost-table').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">No projects found.</td></tr>';
+  }
+
+  function monthlyExpenseTotals() {
+    const m = {};
+    DB.expenses.filter(e => e.status === 'approved').forEach(e => {
+      const k = String(e.date).slice(0,7);
+      m[k] = (m[k] || 0) + Number(e.amount || 0);
+    });
+    return m;
+  }
+
+  function renderForecasting() {
+    const revenue = monthlyRevenue();
+    const expenses = monthlyExpenseTotals();
+    const months = Object.keys({ ...revenue, ...expenses }).sort().slice(-6);
+    const avgRevenue = months.length ? months.reduce((s,m) => s + (revenue[m] || 0), 0) / months.length : 0;
+    const avgExpense = months.length ? months.reduce((s,m) => s + (expenses[m] || 0), 0) / months.length : 0;
+    const avgNet = avgRevenue - avgExpense;
+    let forecastRows = '';
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date();
+      d.setMonth(d.getMonth() + i);
+      const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+      forecastRows += `<tr><td>${label} (forecast)</td><td>${fmtZAR(avgRevenue)}</td><td>${fmtZAR(avgExpense)}</td><td>${fmtZAR(avgNet)}</td></tr>`;
+    }
+    const historyRows = months.map(m => `<tr><td>${m}</td><td>${fmtZAR(revenue[m] || 0)}</td><td>${fmtZAR(expenses[m] || 0)}</td><td>${fmtZAR((revenue[m] || 0) - (expenses[m] || 0))}</td></tr>`).join('');
+    const budgetRows = DB.budgets.map(b => {
+      const spent = DB.expenses.filter(e => e.category === b.category || e.category.startsWith(b.category)).reduce((s,e) => s + Number(e.amount || 0), 0);
+      const pct = b.annual ? spent / b.annual * 100 : 0;
+      return `<tr><td>${b.category}</td><td>${fmtZAR(b.annual)}</td><td>${fmtZAR(spent)}</td><td>${pct.toFixed(1)}%</td><td><span class="badge badge-${pct >= 100 ? 'danger' : pct > 75 ? 'warning' : 'success'}">${pct >= 100 ? 'Over' : pct > 75 ? 'Near Limit' : 'OK'}</span></td></tr>`;
+    }).join('');
+    document.getElementById('forecast-output').innerHTML = `
+      <h4 style="margin-bottom:10px;">Historical Monthly Performance</h4>
+      <div class="card" style="padding:0;margin-bottom:20px;"><table class="data-table"><thead><tr><th>Month</th><th>Revenue</th><th>Expenses</th><th>Net</th></tr></thead><tbody>${historyRows || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No history yet.</td></tr>'}</tbody></table></div>
+      <h4 style="margin-bottom:10px;">3-Month Forecast (based on average of last ${months.length || 0} months)</h4>
+      <div class="card" style="padding:0;margin-bottom:20px;"><table class="data-table"><thead><tr><th>Month</th><th>Forecast Revenue</th><th>Forecast Expenses</th><th>Forecast Net</th></tr></thead><tbody>${forecastRows}</tbody></table></div>
+      <h4 style="margin-bottom:10px;">Budget vs Actual</h4>
+      <div class="card" style="padding:0;margin:0;"><table class="data-table"><thead><tr><th>Category</th><th>Annual Budget</th><th>Actual</th><th>Used</th><th>Status</th></tr></thead><tbody>${budgetRows || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No budgets set.</td></tr>'}</tbody></table></div>
+    `;
+  }
+
+  function renderPayrollSummary() {
+    const grouped = {};
+    DB.payrollRecords.forEach(r => {
+      grouped[r.period] = grouped[r.period] || { gross: 0, paye: 0, uif: 0, net: 0, count: 0 };
+      grouped[r.period].gross += Number(r.gross) || 0;
+      grouped[r.period].paye += Number(r.paye) || 0;
+      grouped[r.period].uif += Number(r.uif) || 0;
+      grouped[r.period].net += Number(r.net) || 0;
+      grouped[r.period].count += 1;
+    });
+    const rows = Object.entries(grouped).sort((a,b) => b[0].localeCompare(a[0])).map(([period, t]) => `<tr>
+      <td>${period}</td>
+      <td>${t.count}</td>
+      <td>${fmtZAR(t.gross)}</td>
+      <td>${fmtZAR(t.paye)}</td>
+      <td>${fmtZAR(t.uif)}</td>
+      <td>${fmtZAR(t.net)}</td>
+    </tr>`).join('');
+    document.getElementById('payroll-summary').innerHTML = rows ? `
+      <div class="card" style="padding:0;margin:0;"><table class="data-table"><thead><tr><th>Period</th><th>Staff Paid</th><th>Gross</th><th>PAYE</th><th>UIF</th><th>Net</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ` : '<p style="color:var(--text-muted);">No payroll runs recorded yet. Open the full Payroll page to process payroll.</p>';
+  }
+
+  function renderAudit() {
+    document.getElementById('audit-table').innerHTML = DB.auditTrail.map(a => `<tr>
+      <td>${new Date(a.time).toLocaleString('en-ZA')}</td>
+      <td>${a.user}</td>
+      <td>${a.action}</td>
+      <td>${a.ref || '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No audit entries yet.</td></tr>';
+  }
+
+  function inReportRange(dateStr) {
+    const from = document.getElementById('report-from').value;
+    const to = document.getElementById('report-to').value;
+    if (from && dateStr < from) return false;
+    if (to && dateStr > to) return false;
+    return true;
+  }
+
+  function generateReport() {
+    const type = document.getElementById('report-type').value;
+    const out = document.getElementById('report-output');
+    if (type === 'income-client') {
+      const grouped = {};
+      DB.payments.forEach(p => {
+        if (!inReportRange(p.date)) return;
+        const inv = DB.invoices.find(i => i.id === p.invoiceId);
+        const c = inv ? getClient(inv.clientId) : null;
+        const key = c ? c.name : 'Cash / Other';
+        grouped[key] = (grouped[key] || 0) + Number(p.amount || 0);
+      });
+      const rows = Object.entries(grouped).sort((a,b) => b[1] - a[1]).map(([client, amt]) => `<tr><td>${client}</td><td style="text-align:right;">${fmtZAR(amt)}</td></tr>`).join('');
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Income by Client</h3><table><thead><tr><th>Client</th><th style="text-align:right;">Income Received</th></tr></thead><tbody>${rows || '<tr><td colspan="2">No income in selected range.</td></tr>'}</tbody></table>`;
+    }
+    if (type === 'expenses-category') {
+      const grouped = {};
+      DB.expenses.filter(e => e.status === 'approved').forEach(e => {
+        if (!inReportRange(e.date)) return;
+        grouped[e.category] = (grouped[e.category] || 0) + Number(e.amount || 0);
+      });
+      const rows = Object.entries(grouped).sort((a,b) => b[1] - a[1]).map(([cat, amt]) => `<tr><td>${cat}</td><td style="text-align:right;">${fmtZAR(amt)}</td></tr>`).join('');
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Expenses by Category</h3><table><thead><tr><th>Category</th><th style="text-align:right;">Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="2">No expenses in selected range.</td></tr>'}</tbody></table>`;
+    }
+    if (type === 'project-profit') {
+      const rows = DB.projects.map(p => {
+        const income = DB.invoices.filter(i => i.projectId === p.id).reduce((s,i) => s + Number(i.total || 0), 0);
+        const expenses = DB.expenses.filter(e => e.projectId === p.id).reduce((s,e) => s + Number(e.amount || 0), 0);
+        const labour = DB.jobCards.filter(j => j.projectId === p.id).reduce((s,j) => {
+          const staff = getStaff(j.assigneeId);
+          const hourly = staff && staff.salary ? Number(staff.salary) / 160 : 0;
+          return s + (Number(j.hours) || 0) * hourly;
+        }, 0);
+        const profit = income - expenses - labour;
+        return `<tr><td>${p.name}</td><td style="text-align:right;">${fmtZAR(income)}</td><td style="text-align:right;">${fmtZAR(expenses)}</td><td style="text-align:right;">${fmtZAR(labour)}</td><td style="text-align:right;">${fmtZAR(profit)}</td></tr>`;
+      }).join('');
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Project Profitability</h3><table><thead><tr><th>Project</th><th style="text-align:right;">Income</th><th style="text-align:right;">Expenses</th><th style="text-align:right;">Labour</th><th style="text-align:right;">Profit</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No projects found.</td></tr>'}</tbody></table>`;
+    }
+    if (type === 'cashbook') {
+      const rows = getCashBook().filter(r => inReportRange(r.date)).map(r => `<tr><td>${fmtDateDMY(r.date)}</td><td>${r.details}</td><td>${r.ref}</td><td style="text-align:right;">${r.inAmt ? fmtZAR(r.inAmt) : ''}</td><td style="text-align:right;">${r.outAmt ? fmtZAR(r.outAmt) : ''}</td><td style="text-align:right;">${fmtZAR(r.balance)}</td></tr>`).join('');
+      out.innerHTML = `<h3 style="margin-bottom:12px;">Cash Book Report</h3><table><thead><tr><th>Date</th><th>Details</th><th>Ref</th><th style="text-align:right;">In</th><th style="text-align:right;">Out</th><th style="text-align:right;">Balance</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No cashbook entries in selected range.</td></tr>'}</tbody></table>`;
+    }
+    if (type === 'vat') {
+      const vatOut = DB.invoices.reduce((s,i) => s + Number(i.vat || 0), 0);
+      const vatIn = DB.expenses.filter(e => e.status === 'approved').reduce((s,e) => s + Number(e.vatClaimable || 0), 0);
+      out.innerHTML = `<h3 style="margin-bottom:12px;">VAT Summary</h3><table><tbody>
+        <tr><td>Output VAT</td><td style="text-align:right;">${fmtZAR(vatOut)}</td></tr>
+        <tr><td>Input VAT</td><td style="text-align:right;">${fmtZAR(vatIn)}</td></tr>
+        <tr><td><strong>VAT Payable / Refund</strong></td><td style="text-align:right;"><strong>${fmtZAR(vatOut - vatIn)}</strong></td></tr>
+      </tbody></table>`;
+    }
+  }
+
+  function printReport() {
+    const html = document.getElementById('report-output').innerHTML;
+    if (!html || html.includes('Choose a report type')) { alert('Generate a report first.'); return; }
+    printHtml('Custom Report', html);
+  }
+
+  function openCashRow(idx) {
+    const r = cashRows[idx];
+    if (!r) return;
+    const body = r.kind === 'receipt' ? (() => {
+      const inv = DB.invoices.find(i => i.id === r.linkId);
+      if (!inv) return '<p>Payroll / cash receipt.</p>';
+      const c = getClient(inv.clientId);
+      return `<p><strong>Client:</strong> ${c ? c.name : '—'} · <strong>Status:</strong> ${inv.status} · <strong>Paid:</strong> ${fmtZAR(inv.paid)} / ${fmtZAR(inv.total)}</p><table class="data-table"><thead><tr><th>Qty</th><th>Desc</th><th>Unit</th><th>Amount</th></tr></thead><tbody>${inv.items.map(it => `<tr><td>${it.qty}</td><td>${it.description}</td><td>${fmtZAR(it.unitPrice)}</td><td>${fmtZAR(it.qty * it.unitPrice)}</td></tr>`).join('')}</tbody></table>`;
+    })() : `<p>${r.details}<br><strong>${fmtZAR(r.outAmt)}</strong></p>`;
+    document.getElementById('dv-title').textContent = r.details;
+    document.getElementById('dv-body').innerHTML = body;
+    document.getElementById('docview-modal').classList.add('active');
+  }
+
+  function uploadDoc(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    const isImg = ['png','jpg','jpeg','gif','webp'].includes(ext);
+    let type = document.getElementById('doc-type').value;
+    if (isImg) type = 'image';
+    const rec = {
+      id: nextId('DOC', 'documents'),
+      name: f.name,
+      type,
+      fileType: ext,
+      size: (f.size / 1024).toFixed(0) + ' KB',
+      dataUrl: null,
+      uploadedAt: new Date().toISOString().slice(0, 10)
+    };
+    DB.documents.push(rec);
+    storeMedia(rec, f);
+    saveDB();
+    renderAll();
+    auditLog('Document uploaded', f.name);
+    e.target.value = '';
+  }
+
+  function viewDoc(id) {
+    const d = DB.documents.find(x => x.id === id);
+    const src = mediaSrc(d);
+    if (!src) { alert('Session-only file — re-upload or connect cloud storage.'); return; }
+    const ext = (d.fileType || '').toLowerCase();
+    if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+      document.getElementById('dv-title').textContent = d.name;
+      document.getElementById('dv-body').innerHTML = `<img src="${src}" style="max-width:100%;border-radius:10px;">`;
+      document.getElementById('docview-modal').classList.add('active');
+    } else {
+      window.open(src, '_blank');
+    }
+  }
+
+  function dlDoc(id) {
+    const d = DB.documents.find(x => x.id === id);
+    const src = mediaSrc(d);
+    if (!src) { alert('Session-only file.'); return; }
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = d.name;
+    a.click();
+  }
+
+  function viewPayslip(id) {
+    const doc = DB.documents.find(x => x.id === id);
+    const s = getStaff(doc.staffId);
+    if (!s) return;
+    const g = s.salary, p = calcPAYE(g), u = calcUIF(g);
+    document.getElementById('dv-title').textContent = doc.name;
+    document.getElementById('dv-body').innerHTML = `<div style="text-align:left;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:16px;line-height:1.9;"><strong style="color:var(--primary);">CENTORO — PAYSLIP ${doc.period}</strong><br>${s.name} (${s.role})<br>Gross ${fmtZAR(g)} · PAYE −${fmtZAR(p)} · UIF −${fmtZAR(u)}<br>NET <strong style="color:var(--success);">${fmtZAR(g - p - u)}</strong></div>`;
+    document.getElementById('docview-modal').classList.add('active');
+  }
+
+  function openPayslipModal() {
+    document.getElementById('ps-staff').innerHTML = DB.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    previewPayslip();
+    document.getElementById('payslip-modal').classList.add('active');
+  }
+
+  function payslipData() {
+    const s = getStaff(document.getElementById('ps-staff').value);
+    const g = s ? s.salary : 0;
+    const p = calcPAYE(g), u = calcUIF(g);
+    return { s, g, p, u, net: g - p - u, period: document.getElementById('ps-period').value };
+  }
+
+  function previewPayslip() {
+    const d = payslipData();
+    if (!d.s) return;
+    document.getElementById('ps-preview').innerHTML = `<strong style="color:var(--primary);">PAYSLIP ${d.period}</strong><br>${d.s.name} (${d.s.role})<br>Gross ${fmtZAR(d.g)} · PAYE −${fmtZAR(d.p)} · UIF −${fmtZAR(d.u)}<br>NET <strong style="color:var(--success);">${fmtZAR(d.net)}</strong>`;
+  }
+
+  function savePayslipDoc() {
+    const d = payslipData();
+    if (!d.s) return;
+    DB.documents.push({
+      id: nextId('DOC', 'documents'),
+      name: `Payslip - ${d.s.name} (${d.period})`,
+      type: 'payslip',
+      fileType: 'generated',
+      size: null,
+      dataUrl: null,
+      uploadedAt: new Date().toISOString().slice(0, 10),
+      staffId: d.s.id,
+      period: d.period
+    });
+    saveDB();
+    closeM('payslip-modal');
+    renderAll();
+    auditLog('Payslip generated', `${d.s.name} (${d.period})`);
+  }
+
+  function printPayslip() {
+    const d = payslipData();
+    const html = `<h1>CENTORO ENTERPRISE — PAYSLIP ${d.period}</h1><table><tr><th>Employee</th><th>Gross</th><th>PAYE</th><th>UIF</th><th>Net</th></tr><tr><td>${d.s.name}</td><td>${d.g.toFixed(2)}</td><td>${d.p.toFixed(2)}</td><td>${d.u.toFixed(2)}</td><td>${d.net.toFixed(2)}</td></tr></table>`;
+    printHtml('PAYSLIP', html);
+  }
+
+  function printCashBook() {
+    const html = `<table><tr><th>Date</th><th>Details</th><th>Ref</th><th>In</th><th>Out</th><th>Balance</th></tr>${cashRows.map(r => `<tr><td>${fmtDateDMY(r.date)}</td><td>${r.details}</td><td>${r.ref}</td><td>${r.inAmt ? r.inAmt.toFixed(2) : ''}</td><td>${r.outAmt ? r.outAmt.toFixed(2) : ''}</td><td>${r.balance.toFixed(2)}</td></tr>`).join('')}</table>`;
+    printHtml('CASH BOOK', html);
+  }
+
+  function printSARS() {
+    const html = `<table><tr><th>Period</th><th>Output</th><th>Input</th><th>Payable</th><th>Status</th></tr>${DB.taxPeriods.map(t => `<tr><td>${t.period}</td><td>${t.outputVat.toFixed(2)}</td><td>${t.inputVat.toFixed(2)}</td><td>${t.payable.toFixed(2)}</td><td>${t.status}</td></tr>`).join('')}</table>`;
+    printHtml('VAT SUMMARY', html);
+  }
+
+  function printVAT201() {
+    const vatOut = DB.invoices.reduce((s,i) => s + Number(i.vat || 0), 0);
+    const vatIn = DB.expenses.filter(e => e.status === 'approved').reduce((s,e) => s + Number(e.vatClaimable || 0), 0);
+    const payable = vatOut - vatIn;
+    const html = `<table><tr><th>VAT201 Line</th><th>Description</th><th>Amount</th></tr><tr><td>14</td><td>Output VAT</td><td>${vatOut.toFixed(2)}</td></tr><tr><td>18</td><td>Input VAT</td><td>${vatIn.toFixed(2)}</td></tr><tr><td>20</td><td>Net VAT Payable / Refund</td><td>${payable.toFixed(2)}</td></tr></table><p style="margin-top:10px;">This is a generated VAT201 working sheet. Actual SARS submission must be done via eFiling or integrated SARS API.</p>`;
+    printHtml('VAT201 RETURN', html);
+  }
+
+  function renderBudgets() {
+    document.getElementById('budget-list').innerHTML = DB.budgets.map(b => {
+      const spent = DB.expenses.filter(e => e.category === b.category || e.category.startsWith(b.category)).reduce((s,e) => s + Number(e.amount || 0), 0);
+      const pct = b.annual ? Math.min(100, spent / b.annual * 100) : 0;
+      return `<div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:.9rem;gap:10px;flex-wrap:wrap;">
+          <span><strong>${b.category}</strong></span>
+          <span>${fmtZAR(spent)} / ${fmtZAR(b.annual)} ${pct >= 100 ? '<span class="badge badge-danger">OVER</span>' : pct > 75 ? '<span class="badge badge-warning">NEAR</span>' : '<span class="badge badge-success">OK</span>'} <button class="btn btn-danger" style="margin-left:8px;padding:4px 8px;" onclick="deleteBudget('${b.id}')">✕</button></span>
+        </div>
+        <div style="height:8px;background:var(--bg-elevated);border-radius:4px;overflow:hidden;margin-top:4px;"><div style="width:${pct}%;height:100%;background:${pct >= 100 ? 'var(--danger)' : pct > 75 ? 'var(--warning)' : 'var(--success)'};"></div></div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-muted);">No budgets yet.</p>';
+  }
+
+  function renderAll() {
+    cashRows = getCashBook();
+    document.getElementById('bank-balance').textContent = fmtZAR(cashRows.length ? cashRows[cashRows.length - 1].balance : 0);
+    document.getElementById('cashbook-table').innerHTML = cashRows.map((r, idx) => `<tr class="clickable" onclick="openCashRow(${idx})"><td>${fmtDate(r.date)}</td><td>${r.details}</td><td>${r.ref}</td><td style="color:var(--success);">${r.inAmt ? fmtZAR(r.inAmt) : ''}</td><td style="color:var(--danger);">${r.outAmt ? fmtZAR(r.outAmt) : ''}</td><td><strong>${fmtZAR(r.balance)}</strong></td></tr>`).join('');
+    const due = getDueAlerts();
+    document.getElementById('due-table').innerHTML = due.map(a => {
+      const c = getClient(a.invoice.clientId);
+      return `<tr>
+        <td><strong>#${a.invoice.trackingNumber}</strong></td>
+        <td>${c ? c.name : '—'}</td>
+        <td>${fmtDate(a.invoice.dueDate)}</td>
+        <td>${Math.abs(a.days)}d ${a.level === 'overdue' ? 'late' : 'left'}</td>
+        <td>${fmtZAR(a.invoice.total - a.invoice.paid)}</td>
+        <td><span class="badge badge-${a.level === 'overdue' ? 'danger' : 'warning'}">${a.level === 'overdue' ? 'OVERDUE' : 'DUE SOON'}</span></td>
+        <td><button class="btn btn-secondary" onclick="openReminderModal('${a.invoice.id}')">Send Reminder</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px;">All paid up!</td></tr>';
+    document.getElementById('bad-table').innerHTML = getBadPayers().map(b => `<tr><td><strong>${b.client.name}</strong><br><small style="color:var(--text-muted);">${b.client.email} · ${b.client.phone}</small></td><td>${b.overdueCount}</td><td>${b.partialCount}</td><td style="color:var(--danger);">${fmtZAR(b.owed)}</td><td><span class="badge badge-${b.risk === 'high' ? 'danger' : 'warning'}">${b.risk.toUpperCase()} RISK</span></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No risky clients.</td></tr>';
+    document.getElementById('g-status').innerHTML = DB.google.connected ? `✅ Connected as <strong style="color:var(--success);">${DB.google.email}</strong> · ${DB.google.docs.length} document(s) shared in-panel` : '⚪ Not connected — connect the company Gmail to bring Docs & Sheets into the admin.';
+    document.getElementById('gdocs-table').innerHTML = DB.google.docs.map(d => `<tr><td><strong>${d.type === 'sheet' ? '📊' : '📄'} ${d.name}</strong></td><td><span class="badge badge-${d.type === 'sheet' ? 'success' : 'info'}">${d.type === 'sheet' ? 'SHEET / EXCEL' : 'DOC / WORD'}</span></td><td>${d.sharedWith.length ? d.sharedWith.map(sid => getStaff(sid) ? getStaff(sid).name.split(' ')[0] : '').join(', ') : '<span style="color:var(--text-muted);">—</span>'}</td><td>${fmtDate(d.addedAt)}</td><td style="white-space:nowrap;"><button class="btn btn-primary" onclick="openEmbed('${d.id}')">Open Here</button> <button class="btn btn-secondary" onclick="openShare('${d.id}')">Share/CC</button> <button class="btn btn-danger" onclick="removeGdoc('${d.id}')">✕</button></td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No docs added yet.</td></tr>';
+    document.getElementById('expenses-table').innerHTML = DB.expenses.map(e => {
+      const p = getProject(e.projectId);
+      return `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td><strong>${e.vendor}</strong></td>
+        <td>${e.description}</td>
+        <td><span class="badge badge-neutral">${e.category}</span></td>
+        <td>${p ? p.name : '—'}</td>
+        <td style="color:var(--danger);">${fmtZAR(e.amount)}</td>
+        <td>${fmtZAR(e.vatClaimable || 0)}</td>
+        <td><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('expenses','${e.id}');renderAll();}">✕</button></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('docs-table').innerHTML = DB.documents.map(d => `<tr><td><strong>${d.name}</strong></td><td><span class="badge badge-info">${d.type}</span></td><td>${(d.fileType || '').toUpperCase()}</td><td>${fmtDate(d.uploadedAt)}</td><td style="white-space:nowrap;">${d.type === 'payslip' && !d.dataUrl ? `<button class="btn btn-secondary" onclick="viewPayslip('${d.id}')">👁 View</button>` : ''}<button class="btn btn-secondary" onclick="viewDoc('${d.id}')">Open</button>${mediaSrc(d) ? `<button class="btn btn-secondary" onclick="dlDoc('${d.id}')">⬇</button>` : ''}<button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('documents','${d.id}');renderAll();}">✕</button></td></tr>`).join('');
+    const vatOut = DB.invoices.reduce((s, i) => s + (Number(i.vat) || 0), 0);
+    const vatIn = DB.expenses.filter(e => e.status === 'approved').reduce((s, e) => s + (Number(e.vatClaimable) || 0), 0);
+    document.getElementById('vat-out').textContent = fmtZAR(vatOut);
+    document.getElementById('vat-in').textContent = fmtZAR(vatIn);
+    document.getElementById('vat-due').textContent = fmtZAR(vatOut - vatIn);
+    document.getElementById('tax-table').innerHTML = DB.taxPeriods.map(t => `<tr><td><strong>${t.period}</strong></td><td>${fmtZAR(t.outputVat)}</td><td>${fmtZAR(t.inputVat)}</td><td style="color:var(--danger);"><strong>${fmtZAR(t.payable)}</strong></td><td><span class="badge badge-${t.status === 'filed' ? 'success' : 'warning'}">${t.status}</span></td></tr>`).join('');
+    document.getElementById('cur-table').innerHTML = DB.currencies.map(c => `<tr><td><strong>${c.code}</strong>${c.base ? ' <span class="badge badge-success">BASE</span>' : ''}</td><td>${c.name}</td><td>${c.base ? '1.0000' : `<input type="number" step="0.0001" value="${c.ratePerZAR}" style="width:110px;padding:6px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);" onchange="const x=DB.currencies.find(y=>y.code==='${c.code}');x.ratePerZAR=parseFloat(this.value)||x.ratePerZAR;saveDB();">`}</td></tr>`).join('');
+    renderBudgets();
+    renderLedger();
+    renderBonuses();
+    renderAR();
+    renderAP();
+    renderBankRec();
+    renderInventory();
+    renderQuotes();
+    renderAccountingInvoices();
+    renderDiscounts();
+    renderJobCosting();
+    renderForecasting();
+    renderPayrollSummary();
+    renderAudit();
+    feather.replace();
+  }
+
+  renderAll();
+  feather.replace();
+</script>
+</body>
+</html>
