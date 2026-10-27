@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Staff Chat · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="staff-chat.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+  .chat-layout { display: grid; grid-template-columns: 340px 1fr; gap: 16px; height: calc(100vh - 180px); }
+  .chat-list { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-y: auto; }
+  .chat-thread-preview { padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+  .chat-thread-preview:hover { background: var(--bg-elevated); }
+  .chat-thread-preview.active { background: var(--bg-elevated); border-left: 3px solid var(--primary); }
+  .chat-thread-preview .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .chat-thread-preview .name { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+  .chat-thread-preview .time { font-size: 0.7rem; color: var(--text-muted); }
+  .chat-thread-preview .subj { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-thread-preview .preview { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-main { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 75%; padding: 10px 14px; border-radius: 14px; font-size: 0.9rem; line-height: 1.4; }
+  .msg.other { background: var(--bg-elevated); color: var(--text-primary); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.mine { background: var(--primary); color: #0f172a; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg.system-msg { background: rgba(59,130,246,.1); color: var(--text-secondary); align-self: center; font-size: .8rem; border-radius: 8px; padding: 6px 12px; }
+  .msg .meta { font-size: 0.7rem; opacity: 0.7; margin-top: 4px; }
+  .msg .attachment { margin-top: 8px; padding: 8px; background: var(--bg-input); border-radius: 6px; font-size: 0.8rem; }
+  .msg .attachment img { max-width: 200px; border-radius: 6px; cursor: pointer; }
+  .msg .attachment video { max-width: 250px; border-radius: 6px; }
+  .chat-input { padding: 14px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chat-input input[type="text"] { flex: 1; padding: 10px 14px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 20px; color: var(--text-primary); min-width: 200px; }
+  .chat-input input[type="text"]:focus { outline: none; border-color: var(--primary); }
+  .empty-chat { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex-direction: column; gap: 10px; }
+  .empty-chat i { opacity: 0.4; }
+  
+  .dept-chip { display: inline-block; background: var(--bg-elevated); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px; font-size: .8rem; margin: 0 6px 6px 0; cursor: pointer; color: var(--text-secondary); }
+  .dept-chip.active { background: var(--primary); color: #0f172a; border-color: var(--primary); font-weight: 700; }
+  
+  .staff-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+  .staff-card .info { display: flex; align-items: center; gap: 10px; }
+  .staff-card .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #0f172a; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem; flex-shrink: 0; }
+  .staff-card .details { flex: 1; }
+  .staff-card .name { font-weight: 600; color: var(--text-primary); font-size: .9rem; }
+  .staff-card .role { font-size: .75rem; color: var(--text-muted); }
+  .staff-card .status-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; display: inline-block; }
+  .staff-card .status-dot.online { background: var(--success); }
+  .staff-card .status-dot.offline { background: var(--text-muted); }
+  
+  .group-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+  .group-card .group-info { flex: 1; min-width: 200px; }
+  .group-card .group-name { font-weight: 600; color: var(--text-primary); font-size: .9rem; }
+  .group-card .group-meta { font-size: .75rem; color: var(--text-muted); }
+  
+  .collapse-indicator { font-size: .8rem; color: var(--text-muted); }
+  
+  .file-type-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; font-size: .75rem; cursor: pointer; color: var(--text-secondary); }
+  .file-type-btn:hover { border-color: var(--primary); color: var(--primary); }
+  
+  .calendar-event { background: var(--bg-elevated); border-left: 3px solid var(--primary); padding: 8px 12px; margin-bottom: 6px; border-radius: 0 6px 6px 0; font-size: .8rem; }
+  
+  @media (max-width: 768px) { .chat-layout { grid-template-columns: 1fr; height: auto; } }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Staff Chat</h1></div>
+      <div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Staff Chat & Collaboration</h1><p>Internal team conversations, project discussions, departments, file sharing and notifications.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="openNewChatModal()"><i data-feather="plus"></i> New Conversation</button>
+          <button class="btn btn-secondary" onclick="openGroupModal()"><i data-feather="users"></i> Create Group/Dept</button>
+          <button class="btn btn-secondary" onclick="openBroadcastModal()"><i data-feather="bell"></i> Notify All Depts</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Active Threads</div><div class="stat-value" id="st-active">0</div></div>
+        <div class="stat-card blue"><div class="stat-label">Project Chats</div><div class="stat-value" id="st-project">0</div></div>
+        <div class="stat-card green"><div class="stat-label">Team/Dept Chats</div><div class="stat-value" id="st-team">0</div></div>
+        <div class="stat-card"><div class="stat-label">Total Messages</div><div class="stat-value" id="st-messages">0</div></div>
+      </div>
+
+      <!-- STAFF DIRECTORY -->
+      <div class="card">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('staff-dir-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Staff Directory — Search, Filter & Connect <span class="collapse-indicator">▾</span>
+          </div>
+          <button class="btn btn-secondary" onclick="event.stopPropagation(); clearStaffFilters()">Clear Filters</button>
+        </div>
+        <div id="staff-dir-body">
+          <div class="form-grid" style="margin-bottom:12px;">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Search Staff</label>
+              <input type="text" id="staff-search" placeholder="Search name, role, department, skills..." oninput="renderStaffDirectory()">
+            </div>
+            <div class="form-group">
+              <label>Department / Service</label>
+              <select id="filter-dept" onchange="renderStaffDirectory()"></select>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="filter-staff-status" onchange="renderStaffDirectory()">
+                <option value="">All</option>
+                <option value="active">Active</option>
+                <option value="on_leave">On Leave</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Sort By</label>
+              <select id="staff-sort" onchange="renderStaffDirectory()">
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="role-asc">Role (A-Z)</option>
+                <option value="dept-asc">Department (A-Z)</option>
+              </select>
+            </div>
+          </div>
+          <div id="dept-chips" style="margin-bottom:12px;"></div>
+          <div id="staff-directory-list"></div>
+        </div>
+      </div>
+
+      <!-- GROUPS & DEPARTMENTS -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('groups-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Groups & Departments — manage and remove <span class="collapse-indicator">▾</span>
+          </div>
+        </div>
+        <div id="groups-body">
+          <div id="groups-list"></div>
+        </div>
+      </div>
+
+      <!-- CALENDAR EVENTS -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('cal-events-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            📅 Upcoming Events & Calendar Messages <span class="collapse-indicator">▾</span>
+          </div>
+        </div>
+        <div id="cal-events-body">
+          <div id="calendar-events-list"></div>
+        </div>
+      </div>
+
+      <!-- CHAT AREA -->
+      <div class="chat-layout">
+        <div class="chat-list" id="chat-list"></div>
+        <div class="chat-main" id="chat-main">
+          <div class="empty-chat"><i data-feather="message-circle" style="width:48px;height:48px;"></i><div>Select a conversation or start a new one</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- NEW CHAT MODAL -->
+<div class="modal-overlay" id="new-chat-modal">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <div class="modal-title">Start New Conversation</div>
+      <button class="modal-close" onclick="closeM('new-chat-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Chat Type</label>
+        <select id="nc-type" onchange="updateNewChatLayout()">
+          <option value="direct">Direct Message (1-on-1)</option>
+          <option value="project">Project Discussion</option>
+          <option value="team">Team / Department Conversation</option>
+          <option value="group">Custom Group</option>
+        </select>
+      </div>
+
+      <div id="nc-direct-wrap">
+        <div class="form-group">
+          <label>Select Staff Member</label>
+          <select id="nc-staff"></select>
+        </div>
+      </div>
+
+      <div id="nc-project-wrap" style="display:none;">
+        <div class="form-group">
+          <label>Select Project</label>
+          <select id="nc-project"></select>
+        </div>
+      </div>
+
+      <div id="nc-team-wrap" style="display:none;">
+        <div class="form-group">
+          <label>Select Team / Department</label>
+          <select id="nc-team"></select>
+        </div>
+      </div>
+
+      <div id="nc-group-wrap" style="display:none;">
+        <div class="form-group">
+          <label>Group Name</label>
+          <input type="text" id="nc-group-name" placeholder="e.g. Marketing Squad, Dev Team">
+        </div>
+        <div class="form-group">
+          <label>Add Members</label>
+          <div id="nc-group-members" style="display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding:8px;background:var(--bg-input);border-radius:8px;border:1px solid var(--border);"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Subject / Topic</label>
+        <input type="text" id="nc-subject" placeholder="e.g. Uncle Cal shoot planning, Website redesign, Marketing campaign...">
+      </div>
+
+      <div class="form-group">
+        <label>First Message</label>
+        <textarea id="nc-message" rows="3" placeholder="Start the conversation..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Link to Calendar (optional)</label>
+        <input type="date" id="nc-calendar-date">
+        <small style="color:var(--text-muted);display:block;margin-top:4px;">If set, this chat will appear on the calendar for that date.</small>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('new-chat-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createNewChat()">Start Chat</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE GROUP / DEPARTMENT MODAL -->
+<div class="modal-overlay" id="group-modal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <div class="modal-title">Create Group / Department</div>
+      <button class="modal-close" onclick="closeM('group-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Group / Department Name</label>
+        <input type="text" id="grp-name" placeholder="e.g. Marketing Team, Creative Dept, IT Support">
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="grp-type">
+          <option value="department">Department</option>
+          <option value="team">Team</option>
+          <option value="project-group">Project Group</option>
+          <option value="marketing">Marketing Team</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="grp-desc" rows="2" placeholder="What is this group for?"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Add Members</label>
+        <div id="grp-members" style="display:flex;flex-wrap:wrap;gap:6px;max-height:250px;overflow-y:auto;padding:10px;background:var(--bg-input);border-radius:8px;border:1px solid var(--border);"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('group-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createGroup()">Create Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- BROADCAST NOTIFICATION MODAL -->
+<div class="modal-overlay" id="broadcast-modal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Broadcast Notification</div>
+      <button class="modal-close" onclick="closeM('broadcast-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Send To</label>
+        <select id="bc-target" onchange="updateBroadcastLayout()">
+          <option value="all">All Staff</option>
+          <option value="all-depts">All Departments</option>
+          <option value="specific-dept">Specific Department</option>
+        </select>
+      </div>
+      <div class="form-group" id="bc-dept-wrap" style="display:none;">
+        <label>Select Department</label>
+        <select id="bc-dept"></select>
+      </div>
+      <div class="form-group">
+        <label>Priority</label>
+        <select id="bc-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Message</label>
+        <textarea id="bc-message" rows="4" placeholder="Type your announcement or notification..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Attach File (optional)</label>
+        <input type="file" id="bc-file" accept="*/*">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('broadcast-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendBroadcast()"><i data-feather="send"></i> Send Notification</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW ATTACHMENT MODAL -->
+<div class="modal-overlay" id="view-file-modal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <div class="modal-title" id="vf-title">File</div>
+      <button class="modal-close" onclick="closeM('view-file-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="vf-body" style="text-align:center;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeM('view-file-modal')">Close</button>
+      <button class="btn btn-primary" id="vf-download" onclick="downloadCurrentFile()">⬇ Download</button>
+    </div>
+  </div>
+</div>
+
+<script src="centoroapi.js"></script>
+<script src="staff-chat.js"></script>
+<script>
+  initApp('staff-chat.html', 'Staff Chat');
+
+  if (!DB.staffChats) DB.staffChats = [];
+  if (!DB.staffGroups) DB.staffGroups = [];
+  if (!DB.staffNotifications) DB.staffNotifications = [];
+  if (!DB.calendarNotes) DB.calendarNotes = [];
+
+  let currentChatId = null;
+  let deptFilter = '';
+  let currentViewFile = null;
+
+  /* UTILITIES */
+  function closeM(id) { document.getElementById(id).classList.remove('active'); }
+  function toggleCard(bodyId, header) {
+    const body = document.getElementById(bodyId);
+    const indicator = header.querySelector('.collapse-indicator');
+    if (body.style.display === 'none') { body.style.display = 'block'; if (indicator) indicator.textContent = '▾'; }
+    else { body.style.display = 'none'; if (indicator) indicator.textContent = '▸'; }
+  }
+
+  /* GROUPS & DEPARTMENTS */
+  function renderGroups() {
+    const allGroups = [...(DB.teams || []), ...(DB.staffGroups || [])];
+    
+    if (!allGroups.length) {
+      document.getElementById('groups-list').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:12px;">No groups or departments created yet.</p>';
+      return;
+    }
+
+    document.getElementById('groups-list').innerHTML = allGroups.map(g => {
+      const isTeam = g.id.startsWith('TM-');
+      const typeLabel = isTeam ? 'Team' : (g.type === 'department' ? 'Department' : g.type === 'marketing' ? 'Marketing Team' : g.type === 'project-group' ? 'Project Group' : 'Team');
+      const typeColor = g.type === 'department' ? 'info' : g.type === 'marketing' ? 'warning' : 'success';
+      const memberCount = (g.members || []).length;
+      const memberNames = (g.members || []).map(id => { const s = getStaff(id); return s ? s.name : ''; }).filter(Boolean).join(', ');
+
+      return `<div class="group-card">
+        <div class="group-info">
+          <div class="group-name">${g.name} <span class="badge badge-${typeColor}">${typeLabel}</span></div>
+          <div class="group-meta">${memberCount} member(s)${memberNames ? ' · ' + memberNames : ''}</div>
+          ${g.description ? `<div class="group-meta" style="margin-top:2px;">${g.description}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary" style="padding:6px 12px;font-size:.8rem;" onclick="startGroupChat('${g.id}')"><i data-feather="message-circle" style="width:14px;height:14px;"></i> Chat</button>
+          <button class="btn btn-danger" style="padding:6px 12px;font-size:.8rem;" onclick="removeGroup('${g.id}', ${isTeam})"><i data-feather="trash-2" style="width:14px;height:14px;"></i> Remove</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    feather.replace();
+  }
+
+  function removeGroup(id, isTeam) {
+    let groupName = '';
+    
+    if (isTeam) {
+      const team = (DB.teams || []).find(t => t.id === id);
+      groupName = team ? team.name : 'this team';
+    } else {
+      const group = (DB.staffGroups || []).find(g => g.id === id);
+      groupName = group ? group.name : 'this group';
+    }
+
+    if (!confirm(`Are you sure you want to remove "${groupName}"? This will delete the group but not remove staff members from the system.`)) return;
+
+    if (isTeam) {
+      DB.teams = (DB.teams || []).filter(t => t.id !== id);
+    } else {
+      DB.staffGroups = (DB.staffGroups || []).filter(g => g.id !== id);
+    }
+
+    saveDB();
+    renderGroups();
+    renderStaffDirectory();
+    logActivity(`removed group/department: ${groupName}`, 'trash-2', 'danger');
+    alert(`✅ "${groupName}" has been removed.`);
+  }
+
+  function startGroupChat(groupId) {
+    const user = getCurrentUser();
+    const myStaffId = user.staffId || 'STF-0001';
+
+    const group = (DB.teams || []).find(t => t.id === groupId) || (DB.staffGroups || []).find(g => g.id === groupId);
+    if (!group) { alert('Group not found.'); return; }
+
+    const existing = DB.staffChats.find(c => c.teamId === groupId && c.type === 'team');
+    if (existing) {
+      openChat(existing.id);
+      return;
+    }
+
+    const participants = [...new Set([myStaffId, ...(group.members || [])])];
+
+    const chat = {
+      id: nextId('SCH', 'staffChats'),
+      type: 'team',
+      subject: `${group.name} Discussion`,
+      projectId: null,
+      teamId: groupId,
+      groupName: null,
+      participants,
+      createdAt: new Date().toISOString(),
+      calendarDate: null,
+      messages: []
+    };
+
+    DB.staffChats.push(chat);
+    saveDB();
+    renderChatList();
+    openChat(chat.id);
+    logActivity(`started group chat for ${group.name}`, 'message-circle', 'info');
+  }
+
+  /* STAFF DIRECTORY */
+  function getDeptList() {
+    const set = new Set();
+    (DB.teams || []).forEach(t => set.add(t.name));
+    (DB.staffGroups || []).forEach(g => set.add(g.name));
+    DB.staff.forEach(s => { if (s.role) set.add(s.role); });
+    return [...set].filter(Boolean).sort();
+  }
+
+  function renderDeptChips() {
+    const depts = getDeptList();
+    let html = `<span class="dept-chip ${deptFilter === '' ? 'active' : ''}" onclick="setDeptFilter('')">All</span>`;
+    depts.forEach(d => {
+      html += `<span class="dept-chip ${deptFilter === d ? 'active' : ''}" onclick="setDeptFilter('${d.replace(/'/g, "\\'")}')">${d}</span>`;
+    });
+    document.getElementById('dept-chips').innerHTML = html;
+  }
+
+  function setDeptFilter(d) {
+    deptFilter = d;
+    renderDeptChips();
+    renderStaffDirectory();
+  }
+
+  function clearStaffFilters() {
+    document.getElementById('staff-search').value = '';
+    document.getElementById('filter-dept').value = '';
+    document.getElementById('filter-staff-status').value = '';
+    document.getElementById('staff-sort').value = 'name-asc';
+    deptFilter = '';
+    renderDeptChips();
+    renderStaffDirectory();
+  }
+
+  function populateDeptFilter() {
+    const depts = getDeptList();
+    const sel = document.getElementById('filter-dept');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">All Departments</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
+    if (current) sel.value = current;
+  }
+
+  function renderStaffDirectory() {
+    populateDeptFilter();
+    renderDeptChips();
+
+    const q = (document.getElementById('staff-search').value || '').toLowerCase();
+    const deptSel = document.getElementById('filter-dept').value;
+    const statusSel = document.getElementById('filter-staff-status').value;
+    const sort = document.getElementById('staff-sort').value;
+
+    let list = DB.staff.filter(s => {
+      const searchParts = [s.name, s.role, s.email, s.username, s.skills || ''].join(' ').toLowerCase();
+      if (q && !searchParts.includes(q)) return false;
+      if (statusSel && s.status !== statusSel) return false;
+      if (deptFilter) {
+        const inDept = (DB.teams || []).some(t => t.name === deptFilter && t.members && t.members.includes(s.id));
+        const inGroup = (DB.staffGroups || []).some(g => g.name === deptFilter && g.members && g.members.includes(s.id));
+        const roleMatch = s.role === deptFilter;
+        if (!inDept && !inGroup && !roleMatch) return false;
+      }
+      if (deptSel) {
+        const inDept = (DB.teams || []).some(t => t.name === deptSel && t.members && t.members.includes(s.id));
+        const inGroup = (DB.staffGroups || []).some(g => g.name === deptSel && g.members && g.members.includes(s.id));
+        const roleMatch = s.role === deptSel;
+        if (!inDept && !inGroup && !roleMatch) return false;
+      }
+      return true;
+    });
+
+    list.sort((a, b) => {
+      if (sort === 'name-asc') return (a.name || '').localeCompare(b.name || '');
+      if (sort === 'role-asc') return (a.role || '').localeCompare(b.role || '');
+      if (sort === 'dept-asc') return (a.role || '').localeCompare(b.role || '');
+      return 0;
+    });
+
+    document.getElementById('staff-directory-list').innerHTML = list.map(s => {
+      const ini = s.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      const statusClass = s.status === 'active' ? 'online' : 'offline';
+      
+      return `<div class="staff-card">
+        <div class="info">
+          <div class="avatar">${ini}</div>
+          <div class="details">
+            <div class="name"><span class="status-dot ${statusClass}"></span>${s.name}</div>
+            <div class="role">${s.role || 'No role'} · ${s.email || '@' + s.username}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-primary" style="padding:6px 12px;font-size:.8rem;" onclick="startDirectChat('${s.id}')"><i data-feather="message-circle" style="width:14px;height:14px;"></i> Chat</button>
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-muted);text-align:center;padding:20px;">No staff found.</p>';
+
+    feather.replace();
+  }
+
+  function startDirectChat(staffId) {
+    const user = getCurrentUser();
+    const myStaffId = user.staffId || 'STF-0001';
+    
+    if (staffId === myStaffId) {
+      alert('You cannot start a chat with yourself.');
+      return;
+    }
+
+    const existing = DB.staffChats.find(c => c.type === 'direct' && c.participants.includes(myStaffId) && c.participants.includes(staffId));
+    if (existing) {
+      openChat(existing.id);
+      return;
+    }
+
+    const staff = getStaff(staffId);
+    const chat = {
+      id: nextId('SCH', 'staffChats'),
+      type: 'direct',
+      subject: `Chat with ${staff ? staff.name : 'Staff'}`,
+      projectId: null,
+      teamId: null,
+      groupName: null,
+      participants: [myStaffId, staffId],
+      createdAt: new Date().toISOString(),
+      calendarDate: null,
+      messages: []
+    };
+
+    DB.staffChats.push(chat);
+    saveDB();
+    renderChatList();
+    openChat(chat.id);
+    logActivity(`started direct chat with ${staff ? staff.name : 'staff'}`, 'message-circle', 'info');
+  }
+
+  /* CALENDAR EVENTS */
+  function renderCalendarEvents() {
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = [];
+
+    (DB.calendarNotes || []).forEach(n => {
+      if (n.date >= today) upcoming.push({ type: 'note', date: n.date, text: n.text, id: n.id });
+    });
+
+    DB.staffChats.forEach(c => {
+      if (c.calendarDate && c.calendarDate >= today) {
+        upcoming.push({ type: 'chat', date: c.calendarDate, text: c.subject, id: c.id });
+      }
+    });
+
+    (DB.jobCards || []).forEach(j => {
+      if (j.dueDate >= today) {
+        upcoming.push({ type: 'job', date: j.dueDate, text: j.title, id: j.id });
+      }
+    });
+
+    upcoming.sort((a, b) => a.date.localeCompare(b.date));
+    const next7 = upcoming.filter(e => e.date <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)).slice(0, 10);
+
+    document.getElementById('calendar-events-list').innerHTML = next7.map(e => {
+      const typeIcon = e.type === 'note' ? '📝' : e.type === 'chat' ? '💬' : '📋';
+      const typeLabel = e.type === 'note' ? 'Note' : e.type === 'chat' ? 'Chat' : 'Job Card';
+      return `<div class="calendar-event">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span>${typeIcon} <strong>${e.text}</strong></span>
+          <span style="font-size:.75rem;color:var(--text-muted);">${fmtDate(e.date)} · ${typeLabel}</span>
+        </div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-muted);text-align:center;padding:12px;">No upcoming events in the next 7 days.</p>';
+  }
+
+  /* CHAT LIST */
+  function renderChatList() {
+    const user = getCurrentUser();
+    const myStaffId = user.staffId;
+
+    document.getElementById('st-active').textContent = DB.staffChats.length;
+    document.getElementById('st-project').textContent = DB.staffChats.filter(c => c.type === 'project').length;
+    document.getElementById('st-team').textContent = DB.staffChats.filter(c => c.type === 'team' || c.type === 'group').length;
+    document.getElementById('st-messages').textContent = DB.staffChats.reduce((s, c) => s + (c.messages || []).length, 0);
+
+    const list = document.getElementById('chat-list');
+    const sorted = [...DB.staffChats].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    list.innerHTML = sorted.map(c => {
+      const last = c.messages && c.messages.length ? c.messages[c.messages.length - 1] : null;
+      const typeLabel = c.type === 'project' ? 'Project' : c.type === 'team' ? 'Team' : c.type === 'group' ? 'Group' : 'Direct';
+      const typeColor = c.type === 'project' ? 'info' : c.type === 'team' ? 'success' : c.type === 'group' ? 'warning' : 'neutral';
+      
+      let participants = '';
+      if (c.type === 'direct') {
+        const other = c.participants.find(id => id !== myStaffId);
+        const staff = getStaff(other);
+        participants = staff ? staff.name : 'Unknown';
+      } else if (c.type === 'project') {
+        const proj = getProject(c.projectId);
+        participants = proj ? proj.name : 'Project';
+      } else if (c.type === 'team') {
+        const team = (DB.teams || []).find(t => t.id === c.teamId) || (DB.staffGroups || []).find(g => g.id === c.teamId);
+        participants = team ? team.name : 'Team';
+      } else if (c.type === 'group') {
+        participants = c.groupName || 'Group';
+      }
+
+      return `<div class="chat-thread-preview ${c.id === currentChatId ? 'active' : ''}" onclick="openChat('${c.id}')">
+        <div class="top">
+          <div class="name">${participants}</div>
+          <div class="time">${last ? new Date(last.time).toLocaleDateString('en-ZA') : new Date(c.createdAt).toLocaleDateString('en-ZA')}</div>
+        </div>
+        <div class="subj">${c.subject}</div>
+        <div style="display:flex;gap:4px;margin-bottom:4px;">
+          <span class="badge badge-${typeColor}">${typeLabel}</span>
+          ${c.calendarDate ? '<span class="badge badge-info">📅 Linked</span>' : ''}
+        </div>
+        <div class="preview">${last ? (last.text || '📎 Attachment') : 'No messages yet'}</div>
+      </div>`;
+    }).join('') || '<p style="color:var(--text-muted);padding:20px;text-align:center;">No conversations yet. Start one!</p>';
+  }
+
+  function openChat(id) {
+    currentChatId = id;
+    renderChatList();
+    renderChatMessages();
+  }
+
+  function renderChatMessages() {
+    const c = DB.staffChats.find(x => x.id === currentChatId);
+    if (!c) return;
+    
+    const user = getCurrentUser();
+    const myStaffId = user.staffId;
+    const main = document.getElementById('chat-main');
+
+    let title = c.subject;
+    let subtitle = '';
+
+    if (c.type === 'direct') {
+      const other = c.participants.find(id => id !== myStaffId);
+      const staff = getStaff(other);
+      title = staff ? staff.name : 'Direct Message';
+      subtitle = '1-on-1 conversation';
+    } else if (c.type === 'project') {
+      const proj = getProject(c.projectId);
+      title = proj ? proj.name : 'Project Chat';
+      subtitle = 'Project discussion';
+    } else if (c.type === 'team') {
+      const team = (DB.teams || []).find(t => t.id === c.teamId) || (DB.staffGroups || []).find(g => g.id === c.teamId);
+      title = team ? team.name : 'Team Chat';
+      subtitle = 'Team conversation';
+    } else if (c.type === 'group') {
+      title = c.groupName || 'Group Chat';
+      subtitle = 'Custom group';
+    }
+
+    const messages = (c.messages || []).map(m => {
+      if (m.system) {
+        return `<div class="msg system-msg">${m.text} · ${new Date(m.time).toLocaleString('en-ZA')}</div>`;
+      }
+      
+      const isMine = m.staffId === myStaffId;
+      const staff = getStaff(m.staffId);
+      
+      let attachmentHtml = '';
+      if (m.attachment) {
+        const src = mediaSrc(m.attachment);
+        if (src) {
+          const ext = (m.attachment.fileType || '').toLowerCase();
+          if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+            attachmentHtml = `<div class="attachment"><img src="${src}" onclick="viewAttachment('${m.attachment.id}')"></div>`;
+          } else if (['mp4','mov','avi','webm'].includes(ext)) {
+            attachmentHtml = `<div class="attachment"><video controls src="${src}" style="max-width:250px;"></video></div>`;
+          } else if (['mp3','wav','ogg','m4a'].includes(ext)) {
+            attachmentHtml = `<div class="attachment"><audio controls src="${src}" style="width:100%;"></audio></div>`;
+          } else {
+            attachmentHtml = `<div class="attachment">📎 <strong>${m.attachment.name}</strong> (${m.attachment.fileType}) <button class="btn btn-secondary" style="padding:4px 8px;font-size:.75rem;margin-left:8px;" onclick="viewAttachment('${m.attachment.id}')">Open</button></div>`;
+          }
+        }
+      }
+
+      return `<div class="msg ${isMine ? 'mine' : 'other'}">
+        ${m.text}
+        ${attachmentHtml}
+        <div class="meta">${staff ? staff.name : 'Unknown'} · ${new Date(m.time).toLocaleString('en-ZA')}</div>
+      </div>`;
+    }).join('');
+
+    main.innerHTML = `
+      <div class="chat-header">
+        <div>
+          <h3 style="color:var(--text-primary);font-size:1rem;">${title}</h3>
+          <div style="font-size:0.8rem;color:var(--text-muted);">${subtitle} · ${c.participants.length} participant(s)${c.calendarDate ? ' · 📅 ' + fmtDate(c.calendarDate) : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary" onclick="addParticipants()">Add People</button>
+          <button class="btn btn-secondary" onclick="linkToCalendar()">📅 Link to Calendar</button>
+        </div>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        ${messages || '<div style="color:var(--text-muted);text-align:center;padding:20px;">No messages yet. Start the conversation!</div>'}
+      </div>
+      <div class="chat-input">
+        <label class="file-type-btn" style="cursor:pointer;">
+          🖼️ Image<input type="file" accept="image/*" style="display:none;" onchange="attachFile(event)">
+        </label>
+        <label class="file-type-btn" style="cursor:pointer;">
+          🎬 Video<input type="file" accept="video/*" style="display:none;" onchange="attachFile(event)">
+        </label>
+        <label class="file-type-btn" style="cursor:pointer;">
+          🎵 Audio<input type="file" accept="audio/*" style="display:none;" onchange="attachFile(event)">
+        </label>
+        <label class="file-type-btn" style="cursor:pointer;">
+          📄 Doc<input type="file" accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.ppt,.pptx" style="display:none;" onchange="attachFile(event)">
+        </label>
+        <label class="file-type-btn" style="cursor:pointer;">
+          📦 Other<input type="file" accept="*/*" style="display:none;" onchange="attachFile(event)">
+        </label>
+        <input type="text" id="chat-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+        <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+      </div>
+    `;
+    
+    const msgs = document.getElementById('chat-messages');
+    msgs.scrollTop = msgs.scrollHeight;
+    feather.replace();
+  }
+
+  function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const c = DB.staffChats.find(x => x.id === currentChatId);
+    if (!c) return;
+
+    const user = getCurrentUser();
+    
+    c.messages = c.messages || [];
+    c.messages.push({
+      id: 'MSG-' + Date.now(),
+      staffId: user.staffId || 'STF-0001',
+      text,
+      attachment: null,
+      time: new Date().toISOString()
+    });
+
+    saveDB();
+    input.value = '';
+    renderChatMessages();
+    renderChatList();
+  }
+
+  function attachFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const c = DB.staffChats.find(x => x.id === currentChatId);
+    if (!c) return;
+
+    const user = getCurrentUser();
+    const rec = {
+      id: 'ATT-' + Date.now(),
+      name: file.name,
+      fileType: (file.name.split('.').pop() || 'FILE').toUpperCase(),
+      size: (file.size / 1024).toFixed(0) + ' KB',
+      dataUrl: null
+    };
+
+    storeMedia(rec, file);
+
+    const ext = rec.fileType.toLowerCase();
+    let label = '📎 Shared a file';
+    if (['png','jpg','jpeg','gif','webp'].includes(ext)) label = '📷 Shared an image';
+    else if (['mp4','mov','avi','webm'].includes(ext)) label = '🎬 Shared a video';
+    else if (['mp3','wav','ogg','m4a'].includes(ext)) label = '🎵 Shared audio';
+    else if (['pdf','doc','docx','txt','xls','xlsx','csv','ppt','pptx'].includes(ext)) label = '📄 Shared a document';
+
+    c.messages = c.messages || [];
+    c.messages.push({
+      id: 'MSG-' + Date.now(),
+      staffId: user.staffId || 'STF-0001',
+      text: label,
+      attachment: rec,
+      time: new Date().toISOString()
+    });
+
+    saveDB();
+    event.target.value = '';
+    renderChatMessages();
+    renderChatList();
+  }
+
+  function viewAttachment(attId) {
+    const c = DB.staffChats.find(x => x.id === currentChatId);
+    if (!c) return;
+    
+    for (const m of c.messages) {
+      if (m.attachment && m.attachment.id === attId) {
+        currentViewFile = m.attachment;
+        const src = mediaSrc(m.attachment);
+        if (!src) { alert('File not available.'); return; }
+        
+        document.getElementById('vf-title').textContent = m.attachment.name;
+        const body = document.getElementById('vf-body');
+        const ext = (m.attachment.fileType || '').toLowerCase();
+        
+        if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+          body.innerHTML = `<img src="${src}" style="max-width:100%;border-radius:8px;">`;
+        } else if (['mp4','mov','avi','webm'].includes(ext)) {
+          body.innerHTML = `<video controls src="${src}" style="max-width:100%;"></video>`;
+        } else if (['mp3','wav','ogg','m4a'].includes(ext)) {
+          body.innerHTML = `<audio controls src="${src}" style="width:100%;"></audio>`;
+        } else if (ext === 'pdf') {
+          body.innerHTML = `<iframe src="${src}" style="width:100%;height:70vh;border:none;"></iframe>`;
+        } else {
+          body.innerHTML = `<div style="padding:30px;"><strong>${m.attachment.name}</strong><p style="color:var(--text-muted);">${m.attachment.fileType} · ${m.attachment.size}</p></div>`;
+        }
+        
+        document.getElementById('view-file-modal').classList.add('active');
+        return;
+      }
+    }
+  }
+
+  function downloadCurrentFile() {
+    if (!currentViewFile) return;
+    const src = mediaSrc(currentViewFile);
+    if (!src) { alert('File not available.'); return; }
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = currentViewFile.name;
+    a.click();
+  }
+
+  function addParticipants() {
+    const c = DB.staffChats.find(x => x.id === currentChatId);
+    if (!c) return;
+    
+    const available = DB.staff.filter(s => !c.participants.includes(s.id));
+    if (!available.length) {
+      alert('All staff members are already in this conversation.');
+      return;
+    }
+    
+    const staffList = available.map(s => s.name).join('\n- ');
+    const choice = prompt('Add which staff member?\n\nAvailable:\n- ' + staffList + '\n\nType the exact name:');
+    if (!choice) return;
+    
+    const staff = DB.staff.find(s => s.name.toLowerCase() === choice.trim().toLowerCase());
+    if (staff) {
+      c.participants.push(staff.id);
+      c.messages = c.messages || [];
+      c.messages.push({
+        id: 'MSG-' + Date.now(),
+        staffId: getCurrentUser().staffId || 'STF-0001',
+        text: `${staff.name} was added to the conversation`,
+        system: true,
+        time: new Date().toISOString()
+      });
+      saveDB();
+      renderChatMessages();
+      renderChatList();
+      logActivity(`added ${staff.name} to chat: ${c.subject}`, 'user-plus', 'info');
+    } else {
+      alert('Staff member not found. Please type the exact name.');
+    }
+  }
+
+  function linkToCalendar() {
+    const c = DB.staffChats.find(x => x.id === currentChatId);
+    if (!c) return;
+    
+    const date = prompt('Enter date to link this chat to (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+    if (!date) return;
+    
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      alert('Please use the format YYYY-MM-DD');
+      return;
+    }
+    
+    c.calendarDate = date;
+    
+    DB.calendarNotes.push({
+      id: nextId('CND', 'calendarNotes'),
+      date: date,
+      projectId: c.projectId || null,
+      text: `💬 Staff Chat: ${c.subject}`,
+      importance: 'medium',
+      createdBy: getCurrentUser().name || 'Admin'
+    });
+    
+    saveDB();
+    renderChatMessages();
+    renderChatList();
+    renderCalendarEvents();
+    alert('✅ Chat linked to calendar for ' + fmtDate(date));
+  }
+
+  /* NEW CHAT MODAL */
+  function openNewChatModal() {
+    document.getElementById('nc-type').value = 'direct';
+    document.getElementById('nc-subject').value = '';
+    document.getElementById('nc-message').value = '';
+    document.getElementById('nc-calendar-date').value = '';
+    document.getElementById('nc-group-name').value = '';
+
+    const staff = [...DB.staff].sort((a, b) => a.name.localeCompare(b.name));
+    document.getElementById('nc-staff').innerHTML = '<option value="">Select...</option>' + staff.map(s => `<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+
+    const projects = [...DB.projects].sort((a, b) => a.name.localeCompare(b.name));
+    document.getElementById('nc-project').innerHTML = '<option value="">Select...</option>' + projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+    const teams = [...(DB.teams || []), ...(DB.staffGroups || [])].sort((a, b) => a.name.localeCompare(b.name));
+    document.getElementById('nc-team').innerHTML = '<option value="">Select...</option>' + teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+    document.getElementById('nc-group-members').innerHTML = DB.staff.map(s => `<label style="display:flex;gap:6px;align-items:center;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.85rem;"><input type="checkbox" value="${s.id}" style="accent-color:var(--primary);"> ${s.name}</label>`).join('');
+
+    updateNewChatLayout();
+    document.getElementById('new-chat-modal').classList.add('active');
+  }
+
+  function updateNewChatLayout() {
+    const type = document.getElementById('nc-type').value;
+    document.getElementById('nc-direct-wrap').style.display = type === 'direct' ? 'block' : 'none';
+    document.getElementById('nc-project-wrap').style.display = type === 'project' ? 'block' : 'none';
+    document.getElementById('nc-team-wrap').style.display = type === 'team' ? 'block' : 'none';
+    document.getElementById('nc-group-wrap').style.display = type === 'group' ? 'block' : 'none';
+  }
+
+  function createNewChat() {
+    const type = document.getElementById('nc-type').value;
+    const subject = document.getElementById('nc-subject').value.trim();
+    const message = document.getElementById('nc-message').value.trim();
+    const calendarDate = document.getElementById('nc-calendar-date').value;
+
+    if (!subject) {
+      alert('Please enter a subject.');
+      return;
+    }
+
+    const user = getCurrentUser();
+    const myStaffId = user.staffId || 'STF-0001';
+
+    let participants = [myStaffId];
+    let projectId = null;
+    let teamId = null;
+    let groupName = null;
+
+    if (type === 'direct') {
+      const staffId = document.getElementById('nc-staff').value;
+      if (!staffId) { alert('Please select a staff member.'); return; }
+      participants.push(staffId);
+    } else if (type === 'project') {
+      projectId = document.getElementById('nc-project').value;
+      if (!projectId) { alert('Please select a project.'); return; }
+      const proj = getProject(projectId);
+      if (proj && proj.assignees) participants = [...new Set([myStaffId, ...proj.assignees])];
+    } else if (type === 'team') {
+      teamId = document.getElementById('nc-team').value;
+      if (!teamId) { alert('Please select a team.'); return; }
+      const team = (DB.teams || []).find(t => t.id === teamId) || (DB.staffGroups || []).find(g => g.id === teamId);
+      if (team && team.members) participants = [...new Set([myStaffId, ...team.members])];
+    } else if (type === 'group') {
+      groupName = document.getElementById('nc-group-name').value.trim();
+      if (!groupName) { alert('Please enter a group name.'); return; }
+      const selected = [...document.querySelectorAll('#nc-group-members input:checked')].map(cb => cb.value);
+      participants = [...new Set([myStaffId, ...selected])];
+      if (participants.length < 2) { alert('Select at least one other member for the group.'); return; }
+    }
+
+    const chat = {
+      id: nextId('SCH', 'staffChats'),
+      type,
+      subject,
+      projectId,
+      teamId,
+      groupName,
+      participants,
+      createdAt: new Date().toISOString(),
+      calendarDate: calendarDate || null,
+      messages: []
+    };
+
+    if (message) {
+      chat.messages.push({
+        id: 'MSG-' + Date.now(),
+        staffId: myStaffId,
+        text: message,
+        attachment: null,
+        time: new Date().toISOString()
+      });
+    }
+
+    if (calendarDate) {
+      DB.calendarNotes.push({
+        id: nextId('CND', 'calendarNotes'),
+        date: calendarDate,
+        projectId: projectId || null,
+        text: `💬 Staff Chat: ${subject}`,
+        importance: 'medium',
+        createdBy: getCurrentUser().name || 'Admin'
+      });
+    }
+
+    DB.staffChats.push(chat);
+    saveDB();
+    closeM('new-chat-modal');
+    renderChatList();
+    renderCalendarEvents();
+    openChat(chat.id);
+    logActivity(`started staff chat: ${subject}`, 'message-circle', 'info');
+  }
+
+  /* GROUP / DEPARTMENT MODAL */
+  function openGroupModal() {
+    document.getElementById('grp-name').value = '';
+    document.getElementById('grp-type').value = 'department';
+    document.getElementById('grp-desc').value = '';
+    document.getElementById('grp-members').innerHTML = DB.staff.map(s => `<label style="display:flex;gap:6px;align-items:center;background:var(--bg-surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.85rem;"><input type="checkbox" value="${s.id}" style="accent-color:var(--primary);"> ${s.name} (${s.role})</label>`).join('');
+    document.getElementById('group-modal').classList.add('active');
+  }
+
+  function createGroup() {
+    const name = document.getElementById('grp-name').value.trim();
+    const type = document.getElementById('grp-type').value;
+    const desc = document.getElementById('grp-desc').value.trim();
+    const selected = [...document.querySelectorAll('#grp-members input:checked')].map(cb => cb.value);
+
+    if (!name) { alert('Group name is required.'); return; }
+    if (!selected.length) { alert('Select at least one member.'); return; }
+
+    const group = {
+      id: nextId('SGR', 'staffGroups'),
+      name,
+      type,
+      description: desc,
+      members: selected,
+      createdAt: new Date().toISOString(),
+      createdBy: getCurrentUser().name || 'Admin'
+    };
+
+    DB.staffGroups.push(group);
+    saveDB();
+    closeM('group-modal');
+    renderGroups();
+    renderStaffDirectory();
+    logActivity(`created ${type}: ${name}`, 'users', 'success');
+    alert(`✅ ${type === 'department' ? 'Department' : 'Group'} "${name}" created with ${selected.length} member(s).`);
+  }
+
+  /* BROADCAST MODAL */
+  function openBroadcastModal() {
+    document.getElementById('bc-target').value = 'all';
+    document.getElementById('bc-priority').value = 'medium';
+    document.getElementById('bc-message').value = '';
+    document.getElementById('bc-file').value = '';
+    
+    const depts = getDeptList();
+    document.getElementById('bc-dept').innerHTML = '<option value="">Select...</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
+    
+    updateBroadcastLayout();
+    document.getElementById('broadcast-modal').classList.add('active');
+  }
+
+  function updateBroadcastLayout() {
+    const target = document.getElementById('bc-target').value;
+    document.getElementById('bc-dept-wrap').style.display = target === 'specific-dept' ? 'block' : 'none';
+  }
+
+  function sendBroadcast() {
+    const target = document.getElementById('bc-target').value;
+    const priority = document.getElementById('bc-priority').value;
+    const message = document.getElementById('bc-message').value.trim();
+    const file = document.getElementById('bc-file').files[0];
+
+    if (!message) { alert('Please enter a message.'); return; }
+
+    if (target === 'specific-dept' && !document.getElementById('bc-dept').value) {
+      alert('Please select a department.');
+      return;
+    }
+
+    const user = getCurrentUser();
+    const notification = {
+      id: nextId('NTF', 'staffNotifications'),
+      target,
+      department: target === 'specific-dept' ? document.getElementById('bc-dept').value : null,
+      priority,
+      message,
+      sender: user.name || 'Admin',
+      senderId: user.staffId || 'STF-0001',
+      time: new Date().toISOString(),
+      attachment: null
+    };
+
+    if (file) {
+      const rec = {
+        id: 'ATT-' + Date.now(),
+        name: file.name,
+        fileType: (file.name.split('.').pop() || 'FILE').toUpperCase(),
+        size: (file.size / 1024).toFixed(0) + ' KB',
+        dataUrl: null
+      };
+      storeMedia(rec, file);
+      notification.attachment = rec;
+    }
+
+    DB.staffNotifications.push(notification);
+
+    let targetLabel = 'All Staff';
+    if (target === 'all-depts') targetLabel = 'All Departments';
+    if (target === 'specific-dept') targetLabel = document.getElementById('bc-dept').value;
+
+    const systemChat = {
+      id: nextId('SCH', 'staffChats'),
+      type: 'group',
+      subject: `📢 ${priority.toUpperCase()}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`,
+      projectId: null,
+      teamId: null,
+      groupName: targetLabel,
+      participants: DB.staff.map(s => s.id),
+      createdAt: new Date().toISOString(),
+      calendarDate: null,
+      messages: [{
+        id: 'MSG-' + Date.now(),
+        staffId: user.staffId || 'STF-0001',
+        text: `📢 ${priority.toUpperCase()} BROADCAST from ${user.name || 'Admin'}:\n\n${message}`,
+        attachment: notification.attachment,
+        time: new Date().toISOString()
+      }]
+    };
+
+    DB.staffChats.push(systemChat);
+    saveDB();
+    closeM('broadcast-modal');
+    renderChatList();
+    logActivity(`sent ${priority} broadcast to ${targetLabel}`, 'bell', 'warning');
+    alert('✅ Broadcast notification sent to ' + targetLabel + '.');
+  }
+
+  /* INIT */
+  renderStaffDirectory();
+  renderGroups();
+  renderCalendarEvents();
+  renderChatList();
+  feather.replace();
+</script>
+</body>
+</html>

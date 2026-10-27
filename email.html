@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Email Center · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="email.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+  .email-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+  .email-tab { padding: 10px 16px; background: transparent; color: var(--text-secondary); font-weight: 600; border: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: .85rem; }
+  .email-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .att-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: .8rem; margin: 3px; }
+  .svc-badge { display:inline-block; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:2px 10px; font-size:.75rem; margin:2px; color:var(--text-secondary); }
+  .email-preview-box { background:#fff; color:#0f172a; border:1px solid var(--border); border-radius:10px; padding:20px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar"><div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Email Center</h1></div><div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div></header>
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Email Center</h1><p>Connect accounts, see clients & their services, compose rich emails with any attachments, and send beautifully branded messages.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="openAccountModal()">+ Connect Account</button>
+          <button class="btn btn-secondary" onclick="switchEmailTab('compose', document.querySelector('[data-etab=compose]'))">✉️ Compose</button>
+        </div>
+      </div>
+
+      <div class="email-tabs">
+        <button class="email-tab active" data-etab="accounts" onclick="switchEmailTab('accounts', this)">Accounts</button>
+        <button class="email-tab" data-etab="clients" onclick="switchEmailTab('clients', this)">Clients & Services</button>
+        <button class="email-tab" data-etab="compose" onclick="switchEmailTab('compose', this)">Compose</button>
+        <button class="email-tab" data-etab="history" onclick="switchEmailTab('history', this)">Sent History</button>
+      </div>
+
+      <!-- ACCOUNTS -->
+      <div id="etab-accounts">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Connected Email Accounts</div>
+            <button class="btn btn-primary" onclick="openAccountModal()">+ Connect Account</button>
+          </div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Connect Google, Microsoft / Outlook, IMAP & cPanel personal mail, any 3rd-party service, or wire in AI automation.</p>
+          <div id="email-accounts-list"></div>
+        </div>
+      </div>
+
+      <!-- CLIENTS -->
+      <div id="etab-clients" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Clients & Their Services</div></div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">See exactly which services each client has used so your emails are always relevant.</p>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Client</th><th>Email</th><th>Services Used</th><th>Total Spent</th><th></th></tr></thead>
+              <tbody id="email-clients-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPOSE -->
+      <div id="etab-compose" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Compose Email</div></div>
+          <div class="form-grid">
+            <div class="form-group"><label>From Account</label><select id="ec-from"></select></div>
+            <div class="form-group"><label>To Client</label><select id="ec-client" onchange="renderComposeClientServices(); renderComposePreview()"></select></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Client's Services</label><div id="ec-client-services"></div></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Subject</label><input id="ec-subject" placeholder="Email subject" oninput="renderComposePreview()"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Message</label><textarea id="ec-body" rows="7" placeholder="Write your message..." oninput="renderComposePreview()"></textarea></div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Attachments (any file type — video, images, documents, graphics…)</label>
+              <label class="btn btn-secondary" style="cursor:pointer;">📎 Add Files<input type="file" multiple style="display:none;" onchange="onComposeFiles(event)"></label>
+              <div id="ec-attachments" style="margin-top:8px;"></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-primary" onclick="sendEmailFromCenter()">✉️ Send Email</button>
+            <button class="btn btn-secondary" onclick="renderComposePreview()">↻ Refresh Preview</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header"><div class="card-title">Live Preview (branded)</div></div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Letterhead, banner, contacts and social links come from <strong>Settings → Email System → Email Branding</strong>.</p>
+          <div id="ec-preview"></div>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div id="etab-history" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Sent History</div></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Subject</th><th>Recipient</th><th>#</th><th>Account</th><th>Attachments</th><th>Sent At</th><th>Status</th></tr></thead>
+              <tbody id="email-history-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- CONNECT ACCOUNT MODAL -->
+<div class="modal-overlay" id="email-account-modal"><div class="modal" style="max-width:560px;"><div class="modal-header"><div class="modal-title">Connect Email Account</div><button class="modal-close" onclick="closeM('email-account-modal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Account Type</label>
+      <select id="ea-type" onchange="onEaTypeChange()">
+        <option value="google">Google (Gmail / Workspace)</option>
+        <option value="microsoft">Microsoft / Outlook</option>
+        <option value="imap">IMAP / cPanel (personal mail)</option>
+        <option value="thirdparty">3rd Party Service</option>
+        <option value="ai">AI Automation</option>
+      </select>
+    </div>
+
+    <div id="ea-group-oauth">
+      <div class="form-grid">
+        <div class="form-group"><label>Email Address</label><input id="ea-email" placeholder="you@company.com"></div>
+        <div class="form-group"><label>App Password / Token</label><input type="password" id="ea-password" placeholder="OAuth handled by backend"></div>
+      </div>
+      <p style="color:var(--text-muted);font-size:.78rem;">🔒 Full OAuth sign-in is completed through your backend. The app password/token is stored encrypted.</p>
+    </div>
+
+    <div id="ea-group-imap" style="display:none;">
+      <div class="form-grid">
+        <div class="form-group"><label>Email Address</label><input id="ea-imap-email" placeholder="you@yourdomain.com"></div>
+        <div class="form-group"><label>IMAP Host</label><input id="ea-imap-host" placeholder="mail.yourdomain.com"></div>
+        <div class="form-group"><label>IMAP Port</label><input id="ea-imap-port" placeholder="993"></div>
+        <div class="form-group"><label>Username</label><input id="ea-imap-user"></div>
+        <div class="form-group"><label>Password</label><input type="password" id="ea-imap-pass"></div>
+        <div class="form-group"><label>SMTP Host</label><input id="ea-smtp-host" placeholder="mail.yourdomain.com"></div>
+        <div class="form-group"><label>SMTP Port</label><input id="ea-smtp-port" placeholder="465"></div>
+      </div>
+    </div>
+
+    <div id="ea-group-3p" style="display:none;">
+      <div class="form-grid">
+        <div class="form-group"><label>Provider Name</label><input id="ea-provider-name" placeholder="e.g. SendGrid, Mailchimp"></div>
+        <div class="form-group"><label>API Key</label><input type="password" id="ea-api-key"></div>
+        <div class="form-group"><label>From Email</label><input id="ea-from-email" placeholder="noreply@company.com"></div>
+      </div>
+    </div>
+
+    <div id="ea-group-ai" style="display:none;">
+      <div class="form-grid">
+        <div class="form-group"><label>Automation Label</label><input id="ea-ai-label" placeholder="e.g. AI Follow-ups"></div>
+        <div class="form-group"><label>AI Engine</label><select id="ea-ai-engine"></select></div>
+      </div>
+      <p style="color:var(--text-muted);font-size:.78rem;">Uses an AI engine connected in Settings → AI & Automation to draft/send on a schedule.</p>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeM('email-account-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEmailAccount()">Connect Account</button>
+  </div>
+</div></div>
+
+<script src="centoroapi.js"></script>
+<script src="email.js"></script>
+<script>
+  initApp('email.html', 'Email Center');
+
+  let composeAttachments = [];
+
+  function closeM(id) { document.getElementById(id).classList.remove('active'); }
+
+  function switchEmailTab(name, btn) {
+    document.querySelectorAll('.email-tab').forEach(t => t.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    ['accounts','clients','compose','history'].forEach(x => {
+      document.getElementById('etab-' + x).style.display = x === name ? 'block' : 'none';
+    });
+    if (name === 'compose') { renderComposeFrom(); renderComposeClientSelect(); renderComposeClientServices(); renderComposeAttachments(); renderComposePreview(); }
+    if (name === 'history') renderHistory();
+    if (name === 'clients') renderEmailClients();
+    if (name === 'accounts') renderAccounts();
+  }
+
+  /* ===== CLIENT SERVICES ===== */
+  function getClientServices(clientId) {
+    const set = new Set();
+    DB.invoices.filter(i => i.clientId === clientId).forEach(i => {
+      if (i.service) set.add(i.service);
+      (i.items || []).forEach(it => { if (it.description) set.add(it.description); });
+    });
+    DB.projects.filter(p => p.clientId === clientId).forEach(p => { if (p.service) set.add(p.service); });
+    return [...set].filter(Boolean);
+  }
+
+  /* ===== ACCOUNTS ===== */
+  function renderAccounts() {
+    const typeLabel = { google:'Google', microsoft:'Microsoft / Outlook', imap:'IMAP / cPanel', thirdparty:'3rd Party', ai:'AI Automation' };
+    document.getElementById('email-accounts-list').innerHTML = DB.emailAccounts.map(a => `<div class="int-card">
+      <div style="flex:1;min-width:220px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <strong style="color:var(--text-primary);">${a.label || a.email || 'Account'}</strong>
+          <span class="badge badge-info">${typeLabel[a.type] || a.type}</span>
+          <span class="badge badge-success">Connected</span>
+        </div>
+        <small style="color:var(--text-muted);">${a.email || ''}${a.imapHost ? ' · IMAP ' + a.imapHost + ':' + (a.imapPort || '') : ''}</small>
+      </div>
+      <button class="btn btn-danger" onclick="disconnectEmailAccount('${a.id}')">Disconnect</button>
+    </div>`).join('') || '<p style="color:var(--text-muted);font-size:.85rem;">No accounts connected. Connect Google, Microsoft, IMAP/cPanel, a 3rd-party service, or AI automation.</p>';
+  }
+  async function disconnectEmailAccount(id) {
+    if (!confirm('Disconnect this account?')) return;
+    try {
+      await ApiService.disconnectEmailAccount(Number(id));
+      await ApiService.syncAdminData('email.html', DB);
+      renderAccounts(); renderComposeFrom();
+    } catch (error) { alert(error.message || 'Unable to disconnect email account.'); }
+  }
+  function openAccountModal() {
+    document.getElementById('ea-type').value = 'google';
+    ['ea-email','ea-password','ea-imap-email','ea-imap-host','ea-imap-port','ea-imap-user','ea-imap-pass','ea-smtp-host','ea-smtp-port','ea-provider-name','ea-api-key','ea-from-email','ea-ai-label'].forEach(i => document.getElementById(i).value = '');
+    const eng = document.getElementById('ea-ai-engine');
+    eng.innerHTML = DB.aiProviders.length ? DB.aiProviders.map(p => `<option value="${p.id}">${p.label || p.provider}</option>`).join('') : '<option value="">No AI engine (set up in Settings)</option>';
+    onEaTypeChange();
+    document.getElementById('email-account-modal').classList.add('active');
+  }
+  function onEaTypeChange() {
+    const t = document.getElementById('ea-type').value;
+    document.getElementById('ea-group-oauth').style.display = (t === 'google' || t === 'microsoft') ? 'block' : 'none';
+    document.getElementById('ea-group-imap').style.display = t === 'imap' ? 'block' : 'none';
+    document.getElementById('ea-group-3p').style.display = t === 'thirdparty' ? 'block' : 'none';
+    document.getElementById('ea-group-ai').style.display = t === 'ai' ? 'block' : 'none';
+  }
+  async function saveEmailAccount() {
+    const type = document.getElementById('ea-type').value;
+    let label = '', email = '', extra = {};
+    if (type === 'google' || type === 'microsoft') {
+      email = document.getElementById('ea-email').value.trim();
+      if (!email) { alert('Email required.'); return; }
+      label = email;
+      extra = { appPassword: document.getElementById('ea-password').value.trim() };
+    } else if (type === 'imap') {
+      email = document.getElementById('ea-imap-email').value.trim();
+      if (!email) { alert('Email required.'); return; }
+      label = email;
+      extra = {
+        imapHost: document.getElementById('ea-imap-host').value.trim(),
+        imapPort: document.getElementById('ea-imap-port').value.trim(),
+        username: document.getElementById('ea-imap-user').value.trim(),
+        passwordHash: document.getElementById('ea-imap-pass').value.trim(),
+        smtpHost: document.getElementById('ea-smtp-host').value.trim(),
+        smtpPort: document.getElementById('ea-smtp-port').value.trim()
+      };
+    } else if (type === 'thirdparty') {
+      label = document.getElementById('ea-provider-name').value.trim();
+      if (!label) { alert('Provider name required.'); return; }
+      email = document.getElementById('ea-from-email').value.trim();
+      extra = { apiKey: document.getElementById('ea-api-key').value.trim(), fromEmail: email };
+    } else if (type === 'ai') {
+      label = document.getElementById('ea-ai-label').value.trim() || 'AI Automation';
+      extra = { aiProviderId: document.getElementById('ea-ai-engine').value };
+    }
+    DB.emailAccounts.push({ id: nextId('EAC','emailAccounts'), type, label, email, ...extra, status: 'connected', connectedAt: new Date().toISOString().slice(0,10) });
+    saveDB();
+    try {
+      await ApiService.persistQueue;
+      await ApiService.syncAdminData('email.html', DB);
+    } catch (error) {
+      alert(error.message || 'Unable to connect this account to the API.');
+      return;
+    }
+    closeM('email-account-modal');
+    renderAccounts(); renderComposeFrom();
+    alert('✅ Account "' + label + '" connected.');
+  }
+
+  /* ===== CLIENTS ===== */
+  function renderEmailClients() {
+    document.getElementById('email-clients-table').innerHTML = DB.clients.map(c => {
+      const services = getClientServices(c.id);
+      return `<tr>
+        <td><strong>${c.name}</strong></td>
+        <td>${c.email || '—'}</td>
+        <td>${services.length ? services.map(s => `<span class="svc-badge">${s}</span>`).join('') : '<span style="color:var(--text-muted);">—</span>'}</td>
+        <td>${fmtZAR(c.totalSpent || 0)}</td>
+        <td><button class="btn btn-primary" onclick="emailClient('${c.id}')">✉️ Email</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px;">No clients.</td></tr>';
+  }
+  function emailClient(id) {
+    switchEmailTab('compose', document.querySelector('[data-etab="compose"]'));
+    document.getElementById('ec-client').value = id;
+    renderComposeClientServices();
+    renderComposePreview();
+  }
+
+  /* ===== COMPOSE ===== */
+  function renderComposeFrom() {
+    document.getElementById('ec-from').innerHTML = DB.emailAccounts.length
+      ? DB.emailAccounts.map(a => `<option value="${a.id}">${a.label || a.email}</option>`).join('')
+      : '<option value="">No account connected</option>';
+  }
+  function renderComposeClientSelect() {
+    const current = document.getElementById('ec-client').value;
+    document.getElementById('ec-client').innerHTML = '<option value="">Select client...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (current) document.getElementById('ec-client').value = current;
+  }
+  function renderComposeClientServices() {
+    const id = document.getElementById('ec-client').value;
+    const el = document.getElementById('ec-client-services');
+    if (!id) { el.innerHTML = '<span style="color:var(--text-muted);font-size:.8rem;">Select a client to see their services.</span>'; return; }
+    const services = getClientServices(id);
+    el.innerHTML = services.length
+      ? services.map(s => `<span class="svc-badge">${s}</span>`).join('')
+      : '<span style="color:var(--text-muted);font-size:.8rem;">No services recorded for this client yet.</span>';
+  }
+
+  function onComposeFiles(event) {
+    const files = [...event.target.files];
+    files.forEach(f => {
+      const rec = { id: 'ATT-' + Date.now() + '-' + Math.random().toString(36).slice(2,6), name: f.name, fileType: (f.name.split('.').pop() || 'FILE').toUpperCase(), size: (f.size/1024).toFixed(0) + ' KB', dataUrl: null };
+      if (f.size <= 2000000) {
+        const r = new FileReader();
+        r.onload = () => { rec.dataUrl = r.result; renderComposeAttachments(); renderComposePreview(); };
+        r.readAsDataURL(f);
+      } else {
+        rec.dataUrl = URL.createObjectURL(f);
+      }
+      composeAttachments.push(rec);
+    });
+    event.target.value = '';
+    renderComposeAttachments();
+    renderComposePreview();
+  }
+  function renderComposeAttachments() {
+    document.getElementById('ec-attachments').innerHTML = composeAttachments.map(a => `<span class="att-chip">📎 ${a.name} <small style="color:var(--text-muted);">(${a.fileType} · ${a.size})</small> <button style="background:none;border:none;color:var(--danger);cursor:pointer;" onclick="removeComposeAttachment('${a.id}')">✕</button></span>`).join('') || '<span style="color:var(--text-muted);font-size:.8rem;">No files attached.</span>';
+  }
+  function removeComposeAttachment(id) {
+    composeAttachments = composeAttachments.filter(a => a.id !== id);
+    renderComposeAttachments();
+    renderComposePreview();
+  }
+
+  function socialIconFor(name) {
+    const m = { 'Facebook':'📘','Instagram':'📷','WhatsApp Business':'💬','Twitter / X':'🐦','TikTok':'🎵','YouTube':'▶️','LinkedIn':'💼','Pinterest':'📌','Snapchat':'👻','Telegram':'✈️','Threads':'🧵','Reddit':'🤖' };
+    return m[name] || '🔗';
+  }
+
+  function renderComposePreview() {
+    const b = DB.emailBranding || {};
+    const subject = document.getElementById('ec-subject').value || '(No subject)';
+    const body = document.getElementById('ec-body').value || '';
+    const bodyHtml = body.replace(/\n/g, '<br>');
+    const clientId = document.getElementById('ec-client').value;
+    const client = getClient(clientId);
+
+    const letterhead = b.letterhead ? `<img src="${b.letterhead}" style="max-width:100%;border-radius:6px;margin-bottom:12px;">` : '';
+    const banner = b.banner ? `<img src="${b.banner}" style="max-width:100%;border-radius:6px;margin-top:14px;">` : '';
+    const contacts = b.footerContacts ? `<div style="margin-top:10px;font-size:12px;color:#64748b;">${b.footerContacts.replace(/\n/g,'<br>')}</div>` : '';
+    const note = b.footerNote ? `<div style="margin-top:6px;font-size:12px;color:#64748b;font-style:italic;">${b.footerNote}</div>` : '';
+
+    const ticked = Object.entries(b.showSocials || {}).filter(([k,v]) => v).map(([k]) => k);
+    const socials = ticked.length ? `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">${ticked.map(name => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:16px;padding:3px 10px;font-size:12px;">${socialIconFor(name)} ${name}</span>`).join('')}</div>` : '';
+
+    const attachments = composeAttachments.length ? `<div style="margin-top:12px;">${composeAttachments.map(a => `<span style="display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:3px 8px;font-size:12px;margin:2px;">📎 ${a.name}</span>`).join('')}</div>` : '';
+
+    document.getElementById('ec-preview').innerHTML = `<div class="email-preview-box">
+      ${letterhead}
+      <div style="font-size:18px;font-weight:700;margin-bottom:4px;">${subject}</div>
+      ${client ? `<div style="font-size:12px;color:#64748b;margin-bottom:10px;">To: ${client.name} &lt;${client.email || ''}&gt;</div>` : ''}
+      <div style="line-height:1.6;">${bodyHtml}</div>
+      ${attachments}
+      ${banner}
+      <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:10px;">
+        ${contacts}
+        ${note}
+        ${socials}
+      </div>
+    </div>`;
+  }
+
+  async function sendEmailFromCenter() {
+    const accountId = document.getElementById('ec-from').value;
+    const clientId = document.getElementById('ec-client').value;
+    const subject = document.getElementById('ec-subject').value.trim();
+    const body = document.getElementById('ec-body').value.trim();
+    if (!accountId) { alert('Connect and select a sending account first.'); return; }
+    if (!clientId) { alert('Select a client.'); return; }
+    if (!subject || !body) { alert('Subject and message required.'); return; }
+    if (composeAttachments.some(attachment => !attachment.dataUrl)) {
+      alert('Each attachment must be 2 MB or smaller. Remove larger files and try again.');
+      return;
+    }
+    const account = DB.emailAccounts.find(a => a.id === accountId);
+    const client = getClient(clientId);
+    if (!client || !client.email) { alert('The selected client does not have an email address.'); return; }
+    try {
+      const response = await ApiService.sendEmail({
+        accountId: Number(accountId),
+        clientId: Number(clientId),
+        recipientName: client.name,
+        recipientEmail: client.email,
+        subject,
+        body,
+        attachments: composeAttachments.map(a => ({ name: a.name, fileType: a.fileType, size: a.size, dataUrl: a.dataUrl || '' }))
+      });
+      if (!response || response.success !== true) throw new Error(response && response.message ? response.message : 'Email was not accepted by the mail server.');
+      await ApiService.syncAdminData('email.html', DB);
+      composeAttachments = [];
+      document.getElementById('ec-subject').value = '';
+      document.getElementById('ec-body').value = '';
+      renderComposeAttachments();
+      renderComposePreview();
+      renderHistory();
+      alert('Email sent to ' + client.name + '.');
+    } catch (error) {
+      alert(error.message || 'Unable to send email. Check the account SMTP settings and try again.');
+    }
+  }
+
+  /* ===== HISTORY ===== */
+  function attachmentCount(value) {
+    if (Array.isArray(value)) return value.length;
+    try {
+      const parsed = JSON.parse(value || '[]');
+      return Array.isArray(parsed) ? parsed.length : 0;
+    } catch (error) { return 0; }
+  }
+  function renderHistory() {
+    document.getElementById('email-history-table').innerHTML = DB.emailCampaigns.slice().reverse().map(c => `<tr>
+      <td><strong>${c.subject}</strong></td>
+      <td>${c.recipient}</td>
+      <td>${c.recipientsCount || 0}</td>
+      <td>${c.provider}</td>
+      <td>${attachmentCount(c.attachments) ? attachmentCount(c.attachments) + ' file(s)' : '—'}</td>
+      <td>${new Date(c.sentAt).toLocaleString('en-ZA')}</td>
+      <td><span class="badge badge-success">${c.status}</span></td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:16px;">No emails sent yet.</td></tr>';
+  }
+
+  /* ===== INIT ===== */
+  renderAccounts();
+  renderEmailClients();
+  renderComposeFrom();
+  renderComposeClientSelect();
+  renderComposeClientServices();
+  renderComposeAttachments();
+  renderComposePreview();
+  renderHistory();
+  feather.replace();
+</script>
+</body>
+</html>

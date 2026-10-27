@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Payroll · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="payroll.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar"><div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Payroll</h1></div><div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div></header>
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Payroll — <span id="period-label"></span></h1><p>PAYE & UIF auto-calculated (SARS). Processing posts to the Cash Book and files payslips to Documents.</p></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="month" id="pay-period" value="2026-07" onchange="renderPayroll()" style="padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+          <button class="btn btn-success" onclick="processPayroll()"><i data-feather="check-circle"></i> Process Payroll</button>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Total Gross</div><div class="stat-value" id="sum-gross">R 0</div></div>
+        <div class="stat-card red"><div class="stat-label">PAYE</div><div class="stat-value" id="sum-paye">R 0</div></div>
+        <div class="stat-card red"><div class="stat-label">UIF</div><div class="stat-value" id="sum-uif">R 0</div></div>
+        <div class="stat-card green"><div class="stat-label">Net Pay</div><div class="stat-value" id="sum-net">R 0</div></div>
+      </div>
+      <div class="card" style="padding:0;">
+        <table class="data-table">
+          <thead><tr><th>Employee</th><th>Role</th><th>Gross</th><th>PAYE</th><th>UIF</th><th>Net</th><th>Status</th><th></th></tr></thead>
+          <tbody id="payroll-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="payslip-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="ps-title">Payslip</div><button class="modal-close" onclick="document.getElementById('payslip-modal').classList.remove('active')">✕</button></div><div class="modal-body" id="ps-body"></div><div class="modal-footer"><button class="btn btn-secondary" onclick="printCurrentPayslip()"><i data-feather="printer"></i> Print / PDF</button></div></div></div>
+<div id="print-area" style="display:none;"></div>
+<style>@media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: #fff; color: #111; padding: 30px; } #print-area table { width: 100%; border-collapse: collapse; } #print-area th, #print-area td { border: 1px solid #ccc; padding: 6px 8px; font-size: .85rem; text-align: left; } }</style>
+
+<script src="centoroapi.js"></script>
+<script src="payroll.js"></script>
+<script>
+  initApp('payroll.html', 'Payroll');
+  if (!DB.payrollRecords) DB.payrollRecords = [];
+  let currentSlip = null;
+
+  function rows() {
+    const period = document.getElementById('pay-period').value;
+    return DB.staff.filter(s => s.status === 'active').map(s => {
+      const gross = Number(s.salary) || 0;
+      const paye = calcPAYE(gross), uif = calcUIF(gross);
+      const rec = DB.payrollRecords.find(r => r.staffId === s.id && r.period === period);
+      return { s, gross, paye, uif, net: gross - paye - uif, status: rec ? rec.status : 'pending' };
+    });
+  }
+
+  function renderPayroll() {
+    const list = rows();
+    document.getElementById('period-label').textContent = document.getElementById('pay-period').value;
+    document.getElementById('sum-gross').textContent = fmtZAR(list.reduce((s, r) => s + r.gross, 0));
+    document.getElementById('sum-paye').textContent = fmtZAR(list.reduce((s, r) => s + r.paye, 0));
+    document.getElementById('sum-uif').textContent = fmtZAR(list.reduce((s, r) => s + r.uif, 0));
+    document.getElementById('sum-net').textContent = fmtZAR(list.reduce((s, r) => s + r.net, 0));
+    document.getElementById('payroll-table').innerHTML = list.map(r => `<tr>
+      <td><strong>${r.s.name}</strong></td><td>${r.s.role}</td><td>${fmtZAR(r.gross)}</td><td>${fmtZAR(r.paye)}</td><td>${fmtZAR(r.uif)}</td><td><strong style="color:var(--success);">${fmtZAR(r.net)}</strong></td>
+      <td><span class="badge badge-${r.status === 'paid' ? 'success' : 'warning'}">${r.status}</span></td>
+      <td style="white-space:nowrap;"><button class="btn btn-secondary" onclick="viewSlip('${r.s.id}')"> Payslip</button>${r.status !== 'paid' ? `<button class="btn btn-success" onclick="markPaid('${r.s.id}')">Pay</button>` : ''}</td></tr>`).join('');
+  }
+
+  function ensureRecord(staffId, period, r) {
+    let rec = DB.payrollRecords.find(x => x.staffId === staffId && x.period === period);
+    if (!rec) { rec = { id: nextId('PRC', 'payrollRecords'), staffId, period, gross: r.gross, paye: r.paye, uif: r.uif, net: r.net, status: 'pending' }; DB.payrollRecords.push(rec); }
+    return rec;
+  }
+
+  function markPaid(staffId) {
+    const period = document.getElementById('pay-period').value;
+    const r = rows().find(x => x.s.id === staffId); if (!r) return;
+    const rec = ensureRecord(staffId, period, r); rec.status = 'paid';
+    DB.payments.push({ id: nextId('PAY', 'payments'), invoiceId: null, amount: r.net, method: 'EFT', date: new Date().toISOString().slice(0, 10), reference: 'PAYROLL-' + period + '-' + r.s.name.replace(/\s+/g, '') });
+    filePayslip(r, period);
+    saveDB(); renderPayroll();
+    logActivity(`paid ${r.s.name} for ${period}`, 'dollar-sign', 'success');
+  }
+
+  function processPayroll() {
+    const period = document.getElementById('pay-period').value;
+    const list = rows().filter(r => r.status !== 'paid');
+    if (!list.length) { alert('Everything for ' + period + ' is already paid. ✅'); return; }
+    if (!confirm(`Process payroll for ${list.length} staff for ${period}? This posts net salaries to the Cash Book and files payslips to Documents.`)) return;
+    list.forEach(r => { const rec = ensureRecord(r.s.id, period, r); rec.status = 'paid'; DB.payments.push({ id: nextId('PAY', 'payments'), invoiceId: null, amount: r.net, method: 'EFT', date: new Date().toISOString().slice(0, 10), reference: 'PAYROLL-' + period }); filePayslip(r, period); });
+    saveDB(); renderPayroll();
+    alert('✅ Payroll processed for ' + period + '. Payslips saved under Accounting → Documents.');
+  }
+
+  function filePayslip(r, period) {
+    const name = `Payslip - ${r.s.name} (${period})`;
+    if (DB.documents.some(d => d.name === name)) return;
+    DB.documents.push({ id: nextId('DOC', 'documents'), name, type: 'payslip', fileType: 'generated', size: null, dataUrl: null, uploadedAt: new Date().toISOString().slice(0, 10), staffId: r.s.id, period });
+  }
+
+  function slipHtml(r, period) { return `<div style="text-align:left;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:16px;line-height:1.9;">
+    <strong style="color:var(--primary);">CENTORO ENTERPRISE — PAYSLIP ${period}</strong><br>
+    Employee: <strong>${r.s.name}</strong> (${r.s.role})<br>
+    Gross: <strong>${fmtZAR(r.gross)}</strong><br>Less PAYE: −${fmtZAR(r.paye)}<br>Less UIF: −${fmtZAR(r.uif)}<br>
+    NET PAY: <strong style="color:var(--success);">${fmtZAR(r.net)}</strong></div>`; }
+
+  function viewSlip(staffId) { const r = rows().find(x => x.s.id === staffId); if (!r) return; currentSlip = r; document.getElementById('ps-title').textContent = 'Payslip — ' + r.s.name; document.getElementById('ps-body').innerHTML = slipHtml(r, document.getElementById('pay-period').value); document.getElementById('payslip-modal').classList.add('active'); }
+  function printCurrentPayslip() { if (!currentSlip) return; const r = currentSlip; document.getElementById('print-area').innerHTML = `<h1>CENTORO ENTERPRISE — PAYSLIP ${document.getElementById('pay-period').value}</h1><table><tr><th>Employee</th><th>Gross</th><th>PAYE</th><th>UIF</th><th>Net</th></tr><tr><td>${r.s.name} (${r.s.role})</td><td>${r.gross.toFixed(2)}</td><td>${r.paye.toFixed(2)}</td><td>${r.uif.toFixed(2)}</td><td>${r.net.toFixed(2)}</td></tr></table>`; window.print(); }
+
+  renderPayroll(); feather.replace();
+</script>
+</body>
+</html>

@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Staff · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="staff.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .perm-item { display: flex; align-items: center; gap: 8px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; cursor: pointer; }
+  .perm-item input { accent-color: var(--primary); }
+
+  .cred-box { background: var(--bg-input); border: 1px dashed var(--primary); border-radius: 8px; padding: 16px; font-family: 'Courier New', monospace; font-size: 0.95rem; line-height: 1.8; }
+  .cred-box strong { color: var(--primary); }
+
+  .service-chip {
+    display: inline-block;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: .8rem;
+    margin: 0 6px 6px 0;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .service-chip.active {
+    background: var(--primary);
+    color: #0f172a;
+    border-color: var(--primary);
+    font-weight: 700;
+  }
+
+  .collapse-indicator {
+    font-size: .8rem;
+    color: var(--text-muted);
+  }
+
+  .staff-doc-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .section-label {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin: 18px 0 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+
+  .skills-dropdown {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    padding: 10px;
+  }
+  .skills-checkboxes {
+    max-height: 220px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .skill-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59,130,246,.15);
+    color: #3b82f6;
+    border-radius: 10px;
+    padding: 4px 10px;
+    font-size: .75rem;
+    font-weight: 600;
+    margin: 0 6px 6px 0;
+  }
+
+  #print-area { display: none; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #print-area, #print-area * { visibility: visible; }
+    #print-area {
+      display: block;
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      background: #fff;
+      color: #111;
+      padding: 30px;
+    }
+    #print-area table { width: 100%; border-collapse: collapse; }
+    #print-area th, #print-area td { border: 1px solid #ccc; padding: 6px 8px; font-size: .8rem; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div>
+      <button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Staff</h1></div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button>
+        <div class="user-avatar" id="topbar-avatar">CJ</div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <div class="page-header">
+        <div>
+          <h1>Staff & Permissions</h1>
+          <p>Issue logins, capture staff records, documents, warnings, contracts and control access.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openStaffModal()"><i data-feather="user-plus"></i> Add Staff</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Team Members</div><div class="stat-value" id="st-team">0</div></div>
+        <div class="stat-card green"><div class="stat-label">Active</div><div class="stat-value" id="st-active">0</div></div>
+        <div class="stat-card"><div class="stat-label">Monthly Payroll</div><div class="stat-value" id="st-payroll">R 0</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('staff-filter-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Search, Filter & Sort <span class="collapse-indicator">▾</span>
+          </div>
+          <button class="btn btn-secondary" onclick="event.stopPropagation(); clearStaffFilters()">Clear Filters</button>
+        </div>
+
+        <div id="staff-filter-body">
+          <div class="form-grid">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Search</label>
+              <input type="text" id="staff-search" placeholder="Search name, username, email, role, skills, ID, phone..." oninput="renderStaff()">
+            </div>
+
+            <div class="form-group">
+              <label>Status</label>
+              <select id="filter-status" onchange="renderStaff()">
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="on_leave">On Leave</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Service / Skill</label>
+              <select id="filter-service" onchange="renderStaff()"></select>
+            </div>
+
+            <div class="form-group">
+              <label>Sort By</label>
+              <select id="staff-sort" onchange="renderStaff()">
+                <option value="name-asc" selected>Name (A-Z)</option>
+                <option value="role-asc">Role (A-Z)</option>
+                <option value="salary-desc">Salary (high to low)</option>
+                <option value="age-desc">Age (high to low)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header" style="cursor:pointer;" onclick="toggleCard('staff-service-body', this)">
+          <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+            Services — click a service to organise staff <span class="collapse-indicator">▾</span>
+          </div>
+        </div>
+
+        <div id="staff-service-body">
+          <div id="service-chips"></div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;">
+        <table class="data-table">
+          <thead>
+            <tr><th>Name</th><th>Login (email / username)</th><th>Role</th><th>Access</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="staff-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ADD / EDIT STAFF -->
+<div class="modal-overlay" id="staff-modal">
+  <div class="modal" style="max-width:920px;">
+    <div class="modal-header">
+      <div class="modal-title" id="staff-modal-title">Add Staff</div>
+      <button class="modal-close" onclick="closeStaffModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <input type="hidden" id="staff-id">
+
+      <div class="section-label">Personal Details</div>
+      <div class="form-grid">
+        <div class="form-group"><label>First Name</label><input type="text" id="staff-first-name"></div>
+        <div class="form-group"><label>Surname</label><input type="text" id="staff-surname"></div>
+        <div class="form-group"><label>Initials</label><input type="text" id="staff-initials"></div>
+        <div class="form-group"><label>Age</label><input type="number" id="staff-age" min="0"></div>
+        <div class="form-group"><label>Date of Birth</label><input type="date" id="staff-dob"></div>
+        <div class="form-group"><label>ID Number</label><input type="text" id="staff-id-number"></div>
+        <div class="form-group"><label>Religion (optional)</label><input type="text" id="staff-religion"></div>
+        <div class="form-group" style="grid-column:1/-1;"><label>Medical Conditions (optional)</label><input type="text" id="staff-medical"></div>
+      </div>
+
+      <div class="section-label">Contact & Emergency</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Email</label><input type="email" id="staff-email"></div>
+        <div class="form-group"><label>Phone</label><input type="text" id="staff-phone"></div>
+        <div class="form-group" style="grid-column:1/-1;"><label>Address</label><input type="text" id="staff-address"></div>
+        <div class="form-group"><label>Emergency Contact Name</label><input type="text" id="staff-emergency-name"></div>
+        <div class="form-group"><label>Emergency Contact Phone</label><input type="text" id="staff-emergency-phone"></div>
+        <div class="form-group" style="grid-column:1/-1;"><label>Next of Kin</label><input type="text" id="staff-next-of-kin"></div>
+      </div>
+
+      <div class="section-label">Employment & Payroll</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Role</label><input type="text" id="staff-role" placeholder="e.g. Video Editor"></div>
+        <div class="form-group"><label>Username</label><input type="text" id="staff-username" placeholder="Auto if blank"></div>
+        <div class="form-group"><label>Monthly Salary (ZAR)</label><input type="number" id="staff-salary" step="0.01"></div>
+        <div class="form-group"><label>Pay Rate</label><input type="number" id="staff-pay-rate" step="0.01"></div>
+        <div class="form-group">
+          <label>Pay Unit</label>
+          <select id="staff-pay-unit">
+            <option value="hour">Per Hour</option>
+            <option value="minute">Per Minute</option>
+            <option value="second">Per Second</option>
+            <option value="day">Per Day</option>
+            <option value="week">Per Week</option>
+            <option value="month">Per Month</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Contract Type</label>
+          <select id="staff-contract-type">
+            <option value="permanent">Permanent</option>
+            <option value="fixed-term">Fixed-Term Contract</option>
+            <option value="weekly">Weekly Contract</option>
+            <option value="monthly">Monthly Contract</option>
+            <option value="casual">Casual</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Contract Start Date</label><input type="date" id="staff-contract-start"></div>
+        <div class="form-group"><label>Contract End Date (optional)</label><input type="date" id="staff-contract-end"></div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="staff-status">
+            <option value="active">Active</option>
+            <option value="on_leave">On Leave</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Issue Password</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="staff-password" placeholder="Set or generate a password">
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('staff-password').value = genPassword()">🎲 Generate</button>
+        </div>
+      </div>
+
+      <div class="section-label">Dashboard Access</div>
+      <div class="perm-grid" id="perm-grid"></div>
+
+      <div class="form-grid" style="margin-top:12px;">
+        <label class="perm-item"><input type="checkbox" id="staff-can-reset"> Can reset other staff passwords (manager)</label>
+        <label class="perm-item"><input type="checkbox" id="staff-can-approve"> Can approve expenses & invoices</label>
+      </div>
+
+      <div class="section-label">Skills</div>
+      <div class="form-group">
+        <details class="skills-dropdown">
+          <summary>Select Skills</summary>
+          <div id="skills-checkboxes" class="skills-checkboxes"></div>
+        </details>
+        <div id="selected-skills" style="margin-top:10px;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input type="text" id="custom-skill" placeholder="Add a new skill">
+          <button type="button" class="btn btn-secondary" onclick="addCustomSkill()">Add Skill</button>
+        </div>
+      </div>
+
+      <div class="section-label">Documents / Experience / Qualifications / Certified ID</div>
+      <div id="staff-documents-section">
+        <div class="form-grid" style="margin-bottom:10px;">
+          <div class="form-group">
+            <label>Document Category</label>
+            <select id="staff-file-category">
+              <option>Working Experience</option>
+              <option>Qualification / Certificate</option>
+              <option>Certified ID</option>
+              <option>Contract</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Note</label>
+            <input type="text" id="staff-file-note" placeholder="Optional note">
+          </div>
+          <div class="form-group">
+            <label>File (all formats accepted)</label>
+            <input type="file" id="staff-file" accept="*/*">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;">
+            <button type="button" class="btn btn-primary" onclick="uploadStaffFile()">Upload</button>
+          </div>
+        </div>
+
+        <div id="staff-files-list"></div>
+      </div>
+
+      <div class="section-label">Contract Agreement</div>
+      <div class="form-group">
+        <label>Contract Terms</label>
+        <textarea id="contract-text" rows="8" readonly>
+EMPLOYMENT AGREEMENT
+
+This agreement is entered into between Centoro Enterprise and the staff member named in this record.
+
+1. The staff member agrees to perform the duties assigned by Centoro Enterprise professionally and to the best of their ability.
+2. The staff member agrees to protect company information, client information and business records.
+3. Working hours, pay rate, contract type and duration are recorded in the staff system.
+4. The staff member agrees to follow company policies, reasonable instructions and lawful workplace requirements.
+5. This agreement may be updated by mutual written agreement between the company and the staff member.
+
+By ticking the box below, the staff member confirms that they have read, understood and accepted this agreement.
+        </textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="perm-item">
+          <input type="checkbox" id="staff-contract-agree">
+          Staff member has read and agrees to the contract terms
+        </label>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" onclick="issueContractPDF()">Issue Contract PDF</button>
+        <button type="button" class="btn btn-secondary" onclick="openStaffCardFromForm()">View Staff QR Card</button>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeStaffModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStaff()">Save Staff</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREDENTIALS SHOWN ONCE -->
+<div class="modal-overlay" id="cred-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">🔐 Login Credentials</div>
+      <button class="modal-close" onclick="document.getElementById('cred-modal').classList.remove('active')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);margin-bottom:12px;">Share these with your staff member now. For security, the password is <strong>never shown again</strong> — you can only reset it.</p>
+      <div class="cred-box" id="cred-box"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="copyCreds()">Copy</button>
+      <button class="btn btn-primary" onclick="document.getElementById('cred-modal').classList.remove('active')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD -->
+<div class="modal-overlay" id="reset-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Reset Password</div>
+      <button class="modal-close" onclick="document.getElementById('reset-modal').classList.remove('active')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="reset-for" style="color:var(--text-secondary);margin-bottom:12px;"></p>
+      <div class="form-group">
+        <label>New Password</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="reset-password">
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('reset-password').value = genPassword()">🎲</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('reset-modal').classList.remove('active')">Cancel</button>
+      <button class="btn btn-primary" onclick="doReset()">Reset Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- WARNING MODAL -->
+<div class="modal-overlay" id="warning-modal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <div class="modal-title">Issue Warning — <span id="warning-staff-name"></span></div>
+      <button class="modal-close" onclick="closeWarningModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Warning Type</label>
+          <select id="warning-type">
+            <option>Verbal Warning</option>
+            <option>Written Warning</option>
+            <option>Final Written Warning</option>
+            <option>Suspension Notice</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="warning-date">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Warning Details</label>
+        <textarea id="warning-text" rows="5" placeholder="e.g. Verbal warning for late arrival..."></textarea>
+      </div>
+
+      <div id="warnings-list"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeWarningModal()">Close</button>
+      <button class="btn btn-danger" onclick="issueWarning(false)">Save Warning</button>
+      <button class="btn btn-primary" onclick="issueWarning(true)">Save & Print Warning PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- STAFF QR CARD -->
+<div class="modal-overlay" id="staff-card-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Staff QR Card</div>
+      <button class="modal-close" onclick="closeStaffCard()">✕</button>
+    </div>
+    <div class="modal-body" id="staff-card-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeStaffCard()">Close</button>
+      <button class="btn btn-primary" onclick="printStaffCard()">Print Card</button>
+    </div>
+  </div>
+</div>
+
+<div id="print-area"></div>
+
+<script src="centoroapi.js"></script>
+<script src="staff.js"></script>
+<script>
+  initApp('staff.html', 'Staff');
+
+  if (!DB.staff) DB.staff = [];
+  if (!DB.staffFiles) DB.staffFiles = [];
+  if (!DB.staffWarnings) DB.staffWarnings = [];
+
+  const me = getCurrentUser();
+  let resetTarget = null;
+  let warningTarget = null;
+
+  let SKILLS_LIST = [
+    'Communication', 'Teamwork', 'Problem Solving', 'Time Management', 'Leadership', 'Customer Service',
+    'Project Management', 'Administration', 'Data Entry', 'Microsoft Office', 'Microsoft Excel', 'Microsoft Word',
+    'Microsoft PowerPoint', 'Accounting', 'Bookkeeping', 'Payroll', 'Tax', 'VAT', 'Budgeting', 'Finance',
+    'Sales', 'Negotiation', 'Marketing', 'Social Media Marketing', 'Facebook Ads', 'Google Ads', 'SEO',
+    'Content Writing', 'Copywriting', 'Graphic Design', 'Logo Design', 'Branding', 'Adobe Photoshop',
+    'Adobe Illustrator', 'Adobe Premiere Pro', 'Adobe After Effects', 'Video Editing', 'Photography',
+    'Videography', 'Audio Editing', 'Music Production', 'Mixing', 'Mastering', 'Event Planning',
+    'Event Coordination', 'Public Speaking', 'Presentation', 'Research', 'Data Analysis', 'Reporting',
+    'HTML', 'CSS', 'JavaScript', 'PHP', 'Laravel', 'Python', 'SQL', 'MySQL', 'WordPress', 'Shopify',
+    'E-Commerce', 'Mobile Apps', 'UI/UX Design', 'Cybersecurity', 'IT Support', 'Help Desk', 'Networking',
+    'Hardware', 'Software', 'Cloud Computing', 'AWS', 'Google Workspace', 'Microsoft 365', 'Agile',
+    'Scrum', 'Quality Control', 'Logistics', 'Supply Chain', 'Driving', 'Code 8', 'Code 10', 'Forklift',
+    'First Aid', 'Health & Safety', 'Supervision', 'Mentoring', 'Training', 'Teaching', 'Tutoring',
+    'Translation', 'Proofreading', 'Legal Compliance', 'Contract Drafting'
+  ];
+
+  function toggleCard(bodyId, header) {
+    const body = document.getElementById(bodyId);
+    const indicator = header.querySelector('.collapse-indicator');
+
+    if (body.style.display === 'none') {
+      body.style.display = 'block';
+      if (indicator) indicator.textContent = '▾';
+    } else {
+      body.style.display = 'none';
+      if (indicator) indicator.textContent = '▸';
+    }
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/"/g, '&quot;');
+  }
+
+  function genPassword() {
+    return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-2).toUpperCase();
+  }
+
+  function makeUsername(name) {
+    return String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 12) || 'staff';
+  }
+
+  function makeUniqueUsername(base, ignoreId = null) {
+    let username = base || 'staff';
+    let suffix = 1;
+
+    while (DB.staff.some(s => s.username === username && s.id !== ignoreId)) {
+      username = base + suffix;
+      suffix++;
+    }
+
+    return username;
+  }
+
+  function getServiceList() {
+    const set = new Set();
+
+    (DB.services || []).forEach(s => {
+      if (s.name) set.add(s.name);
+    });
+
+    DB.staff.forEach(s => {
+      String(s.skills || '').split(',').forEach(skill => {
+        const clean = skill.trim();
+        if (clean) set.add(clean);
+      });
+    });
+
+    return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }
+
+  function populateStaffFilters() {
+    const serviceSel = document.getElementById('filter-service');
+    const currentService = serviceSel.value;
+
+    const services = getServiceList();
+
+    serviceSel.innerHTML = '<option value="">All Services / Skills</option>' + services.map(s => `<option value="${esc(s)}">${s}</option>`).join('');
+
+    if (currentService) serviceSel.value = currentService;
+  }
+
+  function staffUsesService(staff, service) {
+    const skills = String(staff.skills || '').toLowerCase();
+    const role = String(staff.role || '').toLowerCase();
+    const target = service.toLowerCase();
+
+    return skills.includes(target) || role.includes(target);
+  }
+
+  function getServiceStaffCounts() {
+    const counts = {};
+    const services = getServiceList();
+
+    services.forEach(service => {
+      counts[service] = DB.staff.filter(s => staffUsesService(s, service)).length;
+    });
+
+    return counts;
+  }
+
+  function renderServiceChips() {
+    const current = document.getElementById('filter-service').value;
+    const services = getServiceList();
+    const counts = getServiceStaffCounts();
+
+    let html = `<span class="service-chip ${current === '' ? 'active' : ''}" onclick="setStaffServiceFilter('')">All</span>`;
+
+    services.forEach(s => {
+      html += `<span class="service-chip ${current === s ? 'active' : ''}" data-service="${esc(s)}" onclick="setStaffServiceFilter(this.getAttribute('data-service'))">${s} (${counts[s] || 0})</span>`;
+    });
+
+    document.getElementById('service-chips').innerHTML = html;
+  }
+
+  function setStaffServiceFilter(value) {
+    document.getElementById('filter-service').value = value;
+    renderStaff();
+  }
+
+  function clearStaffFilters() {
+    document.getElementById('staff-search').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-service').value = '';
+    document.getElementById('staff-sort').value = 'name-asc';
+    renderStaff();
+  }
+
+  function getFilteredStaff() {
+    const q = (document.getElementById('staff-search').value || '').toLowerCase();
+    const status = document.getElementById('filter-status').value;
+    const service = document.getElementById('filter-service').value;
+    const sort = document.getElementById('staff-sort').value;
+
+    let list = DB.staff.filter(s => {
+      const searchParts = [
+        s.name,
+        s.firstName,
+        s.surname,
+        s.initials,
+        s.username,
+        s.email,
+        s.role,
+        s.phone,
+        s.address,
+        s.idNumber,
+        s.skills
+      ].join(' ').toLowerCase();
+
+      if (q && !searchParts.includes(q)) return false;
+      if (status && s.status !== status) return false;
+      if (service && !staffUsesService(s, service)) return false;
+
+      return true;
+    });
+
+    list.sort((a, b) => {
+      if (sort === 'name-asc') return (a.name || '').localeCompare(b.name || '');
+      if (sort === 'role-asc') return (a.role || '').localeCompare(b.role || '');
+      if (sort === 'salary-desc') return Number(b.salary || 0) - Number(a.salary || 0);
+      if (sort === 'age-desc') return Number(b.age || 0) - Number(a.age || 0);
+      return 0;
+    });
+
+    return list;
+  }
+
+  function renderStaff() {
+    populateStaffFilters();
+
+    document.getElementById('st-team').textContent = DB.staff.length;
+    document.getElementById('st-active').textContent = DB.staff.filter(s => s.status === 'active').length;
+    document.getElementById('st-payroll').textContent = fmtZAR(DB.staff.reduce((s, x) => s + (Number(x.salary) || 0), 0));
+
+    const list = getFilteredStaff();
+
+    document.getElementById('staff-table').innerHTML = list.map(s => {
+      const permCount = Object.values(s.permissions || {}).filter(Boolean).length;
+
+      return `<tr>
+        <td><strong>${s.name}</strong><br><small style="color:var(--text-muted);">${s.role}</small></td>
+        <td>${s.email ? s.email + '<br><small style="color:var(--text-muted);">or @' + s.username + '</small>' : '@' + s.username}</td>
+        <td>${s.role}</td>
+        <td><span class="badge badge-info">${permCount}/${ALL_PERMS.length} sections</span>${s.canResetPasswords ? ' <span class="badge badge-warning">Manager</span>' : ''}</td>
+        <td><span class="badge badge-${s.status === 'active' ? 'success' : 'neutral'}">${(s.status || '').replace('_', ' ')}</span></td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-secondary" onclick="editStaff('${s.id}')">Edit</button>
+          <button class="btn btn-danger" onclick="openWarningModal('${s.id}')">Warning</button>
+          <button class="btn btn-secondary" onclick="openStaffCard('${s.id}')">QR Card</button>
+          ${me.canResetPasswords ? `<button class="btn btn-primary" onclick="openReset('${s.id}')">Reset PW</button>` : ''}
+          <button class="btn btn-danger" onclick="removeStaff('${s.id}')">✕</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No staff found.</td></tr>';
+
+    renderServiceChips();
+    feather.replace();
+  }
+
+  function renderPermGrid(selected) {
+    document.getElementById('perm-grid').innerHTML = ALL_PERMS.map(p => `
+      <label class="perm-item"><input type="checkbox" value="${p}" ${selected && selected[p] ? 'checked' : ''}> ${PERM_LABELS[p]}</label>
+    `).join('');
+  }
+
+  function getSelectedSkills() {
+    return [...document.querySelectorAll('.skill-check:checked')].map(i => i.value);
+  }
+
+  function renderSelectedSkills() {
+    const selected = getSelectedSkills();
+
+    document.getElementById('selected-skills').innerHTML = selected.length
+      ? selected.map(skill => `<span class="skill-chip">${esc(skill)} <button style="background:none;border:none;color:#3b82f6;cursor:pointer;" onclick="removeSkill('${esc(skill)}')">×</button></span>`).join('')
+      : '<span style="color:var(--text-muted);font-size:.85rem;">No skills selected yet.</span>';
+  }
+
+  function renderSkillCheckboxes(selectedSkills = []) {
+    selectedSkills.forEach(skill => {
+      if (!SKILLS_LIST.includes(skill)) SKILLS_LIST.push(skill);
+    });
+
+    SKILLS_LIST.sort((a, b) => a.localeCompare(b));
+
+    document.getElementById('skills-checkboxes').innerHTML = SKILLS_LIST.map(skill => `
+      <label class="perm-item">
+        <input type="checkbox" class="skill-check" value="${esc(skill)}" ${selectedSkills.includes(skill) ? 'checked' : ''} onchange="renderSelectedSkills()">
+        ${esc(skill)}
+      </label>
+    `).join('');
+
+    renderSelectedSkills();
+  }
+
+  function addCustomSkill() {
+    const input = document.getElementById('custom-skill');
+    const skill = input.value.trim();
+
+    if (!skill) return;
+
+    const currentSelected = getSelectedSkills();
+
+    if (!SKILLS_LIST.includes(skill)) {
+      SKILLS_LIST.push(skill);
+    }
+
+    if (!currentSelected.includes(skill)) {
+      currentSelected.push(skill);
+    }
+
+    renderSkillCheckboxes(currentSelected);
+    input.value = '';
+  }
+
+  function removeSkill(skill) {
+    const currentSelected = getSelectedSkills().filter(s => s !== skill);
+    renderSkillCheckboxes(currentSelected);
+  }
+
+  function renderStaffRelated(staffId) {
+    const filesEl = document.getElementById('staff-files-list');
+
+    if (!staffId) {
+      filesEl.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;">Save the staff member first to upload documents.</p>';
+      return;
+    }
+
+    const files = DB.staffFiles.filter(f => f.staffId === staffId);
+
+    filesEl.innerHTML = files.map(f => `
+      <div class="staff-doc-item">
+        <div>
+          <strong>${f.name}</strong><br>
+          <small style="color:var(--text-muted);">${f.category} · ${f.uploadedAt}${f.note ? ' · ' + f.note : ''}</small>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary" onclick="viewStaffFile('${f.id}')">Open</button>
+          <button class="btn btn-danger" onclick="deleteStaffFile('${f.id}')">✕</button>
+        </div>
+      </div>
+    `).join('') || '<p style="color:var(--text-muted);font-size:.85rem;">No documents uploaded yet.</p>';
+  }
+
+  function openStaffModal() {
+    document.getElementById('staff-id').value = '';
+    document.getElementById('staff-modal-title').textContent = 'Add Staff';
+
+    [
+      'staff-first-name','staff-surname','staff-initials','staff-age','staff-dob','staff-id-number','staff-religion','staff-medical',
+      'staff-email','staff-phone','staff-address','staff-emergency-name','staff-emergency-phone','staff-next-of-kin',
+      'staff-role','staff-username','staff-salary','staff-pay-rate','staff-contract-start','staff-contract-end',
+      'staff-password','staff-file-note','custom-skill'
+    ].forEach(id => document.getElementById(id).value = '');
+
+    document.getElementById('staff-pay-unit').value = 'hour';
+    document.getElementById('staff-contract-type').value = 'permanent';
+    document.getElementById('staff-status').value = 'active';
+    document.getElementById('staff-can-reset').checked = false;
+    document.getElementById('staff-can-approve').checked = false;
+    document.getElementById('staff-contract-agree').checked = false;
+    document.getElementById('staff-file').value = '';
+
+    renderPermGrid(null);
+    renderSkillCheckboxes([]);
+    renderStaffRelated('');
+
+    document.getElementById('staff-modal').classList.add('active');
+  }
+
+  function closeStaffModal() {
+    document.getElementById('staff-modal').classList.remove('active');
+  }
+
+  function editStaff(id) {
+    const s = getStaff(id);
+    if (!s) return;
+
+    document.getElementById('staff-id').value = s.id;
+    document.getElementById('staff-modal-title').textContent = 'Edit Staff';
+
+    document.getElementById('staff-first-name').value = s.firstName || (s.firstName || s.surname ? '' : s.name);
+    document.getElementById('staff-surname').value = s.surname || '';
+    document.getElementById('staff-initials').value = s.initials || '';
+    document.getElementById('staff-age').value = s.age || '';
+    document.getElementById('staff-dob').value = s.dob || '';
+    document.getElementById('staff-id-number').value = s.idNumber || '';
+    document.getElementById('staff-religion').value = s.religion || '';
+    document.getElementById('staff-medical').value = s.medicalConditions || '';
+
+    document.getElementById('staff-email').value = s.email || '';
+    document.getElementById('staff-phone').value = s.phone || '';
+    document.getElementById('staff-address').value = s.address || '';
+    document.getElementById('staff-emergency-name').value = s.emergencyName || '';
+    document.getElementById('staff-emergency-phone').value = s.emergencyPhone || '';
+    document.getElementById('staff-next-of-kin').value = s.nextOfKin || '';
+
+    document.getElementById('staff-role').value = s.role || '';
+    document.getElementById('staff-username').value = s.username || '';
+    document.getElementById('staff-salary').value = s.salary || '';
+    document.getElementById('staff-pay-rate').value = s.payRate || '';
+    document.getElementById('staff-pay-unit').value = s.payUnit || 'hour';
+    document.getElementById('staff-contract-type').value = s.contractType || 'permanent';
+    document.getElementById('staff-contract-start').value = s.contractStart || '';
+    document.getElementById('staff-contract-end').value = s.contractEnd || '';
+    document.getElementById('staff-status').value = s.status || 'active';
+
+    document.getElementById('staff-password').value = '';
+    document.getElementById('staff-can-reset').checked = !!s.canResetPasswords;
+    document.getElementById('staff-can-approve').checked = !!s.canApprove;
+    document.getElementById('staff-contract-agree').checked = !!s.contractSigned;
+
+    const selectedSkills = String(s.skills || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    renderPermGrid(s.permissions);
+    renderSkillCheckboxes(selectedSkills);
+    renderStaffRelated(id);
+
+    document.getElementById('staff-modal').classList.add('active');
+  }
+
+  async function saveStaff() {
+    const id = document.getElementById('staff-id').value;
+
+    const firstName = document.getElementById('staff-first-name').value.trim();
+    const surname = document.getElementById('staff-surname').value.trim();
+    const name = [firstName, surname].filter(Boolean).join(' ').trim();
+
+    if (!name) {
+      alert('Name is required.');
+      return;
+    }
+
+    const email = document.getElementById('staff-email').value.trim();
+
+    let username = document.getElementById('staff-username').value.trim();
+
+    if (!username) {
+      username = email ? email.split('@')[0].toLowerCase() : makeUsername(name);
+    }
+
+    username = makeUniqueUsername(username, id || null);
+
+    const password = document.getElementById('staff-password').value;
+
+    const permissions = {};
+    document.querySelectorAll('#perm-grid input').forEach(cb => permissions[cb.value] = cb.checked);
+
+    const skills = getSelectedSkills();
+
+    const data = {
+      name,
+      firstName,
+      lastName: surname,
+      initials: document.getElementById('staff-initials').value.trim(),
+      age: document.getElementById('staff-age').value,
+      dob: document.getElementById('staff-dob').value,
+      idNumber: document.getElementById('staff-id-number').value.trim(),
+      religion: document.getElementById('staff-religion').value.trim(),
+      medicalConditions: document.getElementById('staff-medical').value.trim(),
+
+      email,
+      phone: document.getElementById('staff-phone').value.trim(),
+      address: document.getElementById('staff-address').value.trim(),
+      emergencyName: document.getElementById('staff-emergency-name').value.trim(),
+      emergencyPhone: document.getElementById('staff-emergency-phone').value.trim(),
+      nextOfKin: document.getElementById('staff-next-of-kin').value.trim(),
+
+      username,
+      role: document.getElementById('staff-role').value.trim().toLowerCase(),
+      salary: parseFloat(document.getElementById('staff-salary').value) || 0,
+      payRate: parseFloat(document.getElementById('staff-pay-rate').value) || 0,
+      payUnit: document.getElementById('staff-pay-unit').value,
+      contractType: document.getElementById('staff-contract-type').value,
+      contractStart: document.getElementById('staff-contract-start').value,
+      contractEnd: document.getElementById('staff-contract-end').value,
+      status: document.getElementById('staff-status').value,
+
+      skills: skills.join(', '),
+
+      permissions: JSON.stringify(permissions),
+      canResetPasswords: document.getElementById('staff-can-reset').checked,
+      canApprove: document.getElementById('staff-can-approve').checked,
+      contractSigned: document.getElementById('staff-contract-agree').checked
+    };
+
+    if (id) {
+      const s = getStaff(id);
+
+      try {
+      const response = await ApiService.updateStaff(Number(id), { ...data, passwordHash: password || undefined });
+      Object.assign(s, { ...(response.data || data), id: String(id), name });
+      closeStaffModal();
+      renderStaff();
+
+      if (password) showCreds(name, email, username, password);
+
+      logActivity(`updated staff ${name}`, 'user-check', 'info');
+      } catch (error) { alert(error.message || 'Unable to update staff member.'); }
+    } else {
+      if (!password) {
+        alert('Issue a password for the new staff member (or click Generate).');
+        return;
+      }
+
+      const s = {
+        passwordHash: password,
+        contractSignedDate: data.contractSigned ? new Date().toISOString().slice(0, 10) : '',
+        ...data
+      };
+
+      try {
+      const response = await ApiService.createStaff(s);
+      const saved = response.data || s;
+      DB.staff.push({ ...saved, id: String(saved.id), name });
+      closeStaffModal();
+      renderStaff();
+
+      showCreds(name, email, username, password);
+
+      logActivity(`hired ${name} and issued login credentials`, 'user-plus', 'success');
+      } catch (error) { alert(error.message || 'Unable to create staff member.'); }
+    }
+  }
+
+  function showCreds(name, email, username, password) {
+    const staff = DB.staff.find(s => s.username === username);
+    const qr = staff ? renderQR('CENTORO-STAFF:' + staff.id + '|' + staff.username) : '';
+
+    document.getElementById('cred-box').innerHTML = `
+      Staff: <strong>${name}</strong><br>
+      ${email ? `Email login: <strong>${email}</strong><br>` : ''}
+      Username login: <strong>@${username}</strong><br>
+      Password: <strong>${password}</strong>
+      <div style="margin-top:12px;">${qr}</div>
+    `;
+
+    document.getElementById('cred-modal').classList.add('active');
+  }
+
+  function copyCreds() {
+    const txt = document.getElementById('cred-box').innerText;
+
+    navigator.clipboard.writeText(txt)
+      .then(() => alert('Credentials copied. Share them securely (e.g. WhatsApp).'))
+      .catch(() => alert(txt));
+  }
+
+  function openReset(id) {
+    resetTarget = id;
+    const s = getStaff(id);
+
+    document.getElementById('reset-for').textContent = `Issue a new password for ${s.name} (${s.email || '@' + s.username}).`;
+    document.getElementById('reset-password').value = genPassword();
+    document.getElementById('reset-modal').classList.add('active');
+  }
+
+  function doReset() {
+    const s = getStaff(resetTarget);
+    if (!s) return;
+
+    const pw = document.getElementById('reset-password').value;
+
+    if (!pw) {
+      alert('Password required.');
+      return;
+    }
+
+    s.passwordHash = pw;
+    saveDB();
+
+    document.getElementById('reset-modal').classList.remove('active');
+
+    showCreds(s.name, s.email, s.username, pw);
+
+    logActivity(`reset password for ${s.name}`, 'key', 'warning');
+  }
+
+  async function removeStaff(id) {
+    if (!confirm('Move this staff member to the Bin? You can restore them later.')) return;
+
+    try { await ApiService.deleteStaff(Number(id)); DB.staff = DB.staff.filter(s => String(s.id) !== String(id)); renderStaff(); }
+    catch (error) { alert(error.message || 'Unable to delete staff member.'); }
+  }
+
+  function uploadStaffFile() {
+    const staffId = document.getElementById('staff-id').value;
+
+    if (!staffId) {
+      alert('Save the staff member first before uploading documents.');
+      return;
+    }
+
+    const fileInput = document.getElementById('staff-file');
+    const file = fileInput.files[0];
+
+    if (!file) {
+      alert('Choose a file to upload.');
+      return;
+    }
+
+    const category = document.getElementById('staff-file-category').value;
+    const note = document.getElementById('staff-file-note').value.trim();
+
+    const rec = {
+      id: 'STFDOC-' + Date.now(),
+      staffId,
+      name: file.name,
+      category,
+      note,
+      fileType: (file.name.split('.').pop() || 'FILE').toUpperCase(),
+      size: (file.size / 1024).toFixed(0) + ' KB',
+      dataUrl: null,
+      uploadedAt: new Date().toISOString().slice(0, 10)
+    };
+
+    DB.staffFiles.push(rec);
+    storeMedia(rec, file);
+    saveDB();
+
+    fileInput.value = '';
+    document.getElementById('staff-file-note').value = '';
+
+    renderStaffRelated(staffId);
+    logActivity(`uploaded ${category} document for ${getStaff(staffId).name}`, 'upload', 'success');
+  }
+
+  function viewStaffFile(id) {
+    const f = DB.staffFiles.find(x => x.id === id);
+    if (!f) return;
+
+    const src = mediaSrc(f);
+
+    if (!src) {
+      alert('Session-only file — re-upload or connect cloud storage.');
+      return;
+    }
+
+    window.open(src, '_blank');
+  }
+
+  function deleteStaffFile(id) {
+    if (!confirm('Delete this document?')) return;
+
+    DB.staffFiles = DB.staffFiles.filter(f => f.id !== id);
+    saveDB();
+
+    renderStaffRelated(document.getElementById('staff-id').value);
+  }
+
+  function openWarningModal(staffId) {
+    const s = getStaff(staffId);
+    if (!s) return;
+
+    warningTarget = staffId;
+
+    document.getElementById('warning-staff-name').textContent = s.name;
+    document.getElementById('warning-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('warning-text').value = '';
+    document.getElementById('warning-type').value = 'Verbal Warning';
+
+    renderWarnings();
+
+    document.getElementById('warning-modal').classList.add('active');
+  }
+
+  function closeWarningModal() {
+    document.getElementById('warning-modal').classList.remove('active');
+  }
+
+  function renderWarnings() {
+    const warnings = DB.staffWarnings.filter(w => w.staffId === warningTarget);
+
+    document.getElementById('warnings-list').innerHTML = warnings.map(w => `
+      <div class="staff-doc-item">
+        <div>
+          <strong>${w.type}</strong><br>
+          ${w.text}<br>
+          <small style="color:var(--text-muted);">${w.date} · Issued by ${w.by}</small>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary" onclick="printWarning('${w.id}')">Print</button>
+          <button class="btn btn-danger" onclick="deleteStaffWarning('${w.id}')">✕</button>
+        </div>
+      </div>
+    `).join('') || '<p style="color:var(--text-muted);font-size:.85rem;">No warnings recorded for this staff member.</p>';
+  }
+
+  function issueWarning(printAfter) {
+    const staffId = warningTarget;
+    const s = getStaff(staffId);
+
+    if (!s) {
+      alert('Staff member must already be on the system before issuing a warning.');
+      return;
+    }
+
+    const type = document.getElementById('warning-type').value;
+    const date = document.getElementById('warning-date').value;
+    const text = document.getElementById('warning-text').value.trim();
+
+    if (!text) {
+      alert('Enter warning details.');
+      return;
+    }
+
+    const warning = {
+      id: 'WRN-' + Date.now(),
+      staffId,
+      type,
+      date,
+      text,
+      by: getCurrentUser().name || 'Admin'
+    };
+
+    DB.staffWarnings.push(warning);
+    saveDB();
+
+    document.getElementById('warning-text').value = '';
+
+    renderWarnings();
+    logActivity(`issued warning to ${s.name}`, 'alert-triangle', 'danger');
+
+    if (printAfter) printWarning(warning.id);
+  }
+
+  function printWarning(warningId) {
+    const w = DB.staffWarnings.find(x => x.id === warningId);
+    if (!w) return;
+
+    const s = getStaff(w.staffId);
+
+    document.getElementById('print-area').innerHTML = `
+      <h1>CENTORO ENTERPRISE — ${w.type.toUpperCase()}</h1>
+      <p><strong>Date:</strong> ${fmtDate(w.date)}</p>
+      <p><strong>Staff Member:</strong> ${s ? s.name : 'Unknown'}</p>
+      <p><strong>Role:</strong> ${s ? s.role : '—'}</p>
+      <p><strong>Issued By:</strong> ${w.by}</p>
+      <br>
+      <p>${w.text}</p>
+      <br><br>
+      <p>Staff Signature: ______________________</p>
+      <br>
+      <p>Company Representative: ______________________</p>
+    `;
+
+    window.print();
+  }
+
+  function deleteStaffWarning(id) {
+    if (!confirm('Delete this warning?')) return;
+
+    DB.staffWarnings = DB.staffWarnings.filter(w => w.id !== id);
+    saveDB();
+
+    renderWarnings();
+  }
+
+  function issueContractPDF() {
+    const staffId = document.getElementById('staff-id').value;
+
+    if (!staffId) {
+      alert('Save the staff member first before issuing a contract.');
+      return;
+    }
+
+    const agree = document.getElementById('staff-contract-agree').checked;
+
+    if (!agree) {
+      alert('The staff member must tick the agreement box before the contract can be issued.');
+      return;
+    }
+
+    const s = getStaff(staffId);
+
+    s.contractSigned = true;
+    s.contractSignedDate = new Date().toISOString().slice(0, 10);
+
+    saveDB();
+    renderStaffRelated(staffId);
+    logActivity(`issued contract to ${s.name}`, 'file-text', 'success');
+
+    const payText = s.payRate ? `${fmtZAR(s.payRate)} per ${s.payUnit}` : (s.salary ? fmtZAR(s.salary) + ' per month' : 'Not specified');
+    const contractText = document.getElementById('contract-text').value;
+
+    document.getElementById('print-area').innerHTML = `
+      <h1>CENTORO ENTERPRISE — STAFF CONTRACT</h1>
+      <p><strong>Staff:</strong> ${s.name}</p>
+      <p><strong>Role:</strong> ${s.role || '—'}</p>
+      <p><strong>ID Number:</strong> ${s.idNumber || '—'}</p>
+      <p><strong>Contract Type:</strong> ${s.contractType || '—'}</p>
+      <p><strong>Start Date:</strong> ${fmtDate(s.contractStart)}</p>
+      <p><strong>End Date:</strong> ${s.contractEnd ? fmtDate(s.contractEnd) : 'Open-ended'}</p>
+      <p><strong>Payment:</strong> ${payText}</p>
+      <p><strong>Agreement Signed:</strong> Yes</p>
+      <p><strong>Date Signed:</strong> ${fmtDate(s.contractSignedDate)}</p>
+      <br>
+      <div style="white-space:pre-wrap;">${contractText}</div>
+      <br>
+      <p>Staff Signature: ______________________</p>
+      <br>
+      <p>Company Representative: ______________________</p>
+    `;
+
+    window.print();
+  }
+
+  function openStaffCard(staffId) {
+    const s = getStaff(staffId);
+    if (!s) return;
+
+    const qr = renderQR('CENTORO-STAFF:' + s.id + '|' + s.username);
+
+    document.getElementById('staff-card-body').innerHTML = `
+      <div style="text-align:center;">
+        <div style="font-size:1.3rem;font-weight:800;color:var(--primary);margin-bottom:6px;">CENTORO STAFF CARD</div>
+        <div style="font-size:1.1rem;font-weight:700;">${s.name}</div>
+        <div style="color:var(--text-secondary);margin-bottom:12px;">${s.role || ''}</div>
+        <div style="margin:0 auto 12px;">${qr}</div>
+        <div style="font-family:'Courier New',monospace;">@${s.username}</div>
+        <div style="color:var(--text-muted);font-size:.8rem;margin-top:6px;">Scan to sign in / verify staff member</div>
+      </div>
+    `;
+
+    document.getElementById('staff-card-modal').classList.add('active');
+    feather.replace();
+  }
+
+  function openStaffCardFromForm() {
+    const staffId = document.getElementById('staff-id').value;
+
+    if (!staffId) {
+      alert('Save the staff member first to view their QR card.');
+      return;
+    }
+
+    openStaffCard(staffId);
+  }
+
+  function closeStaffCard() {
+    document.getElementById('staff-card-modal').classList.remove('active');
+  }
+
+  function printStaffCard() {
+    const content = document.getElementById('staff-card-body').innerHTML;
+
+    document.getElementById('print-area').innerHTML = `
+      <div style="text-align:center;">
+        ${content}
+      </div>
+    `;
+
+    window.print();
+  }
+
+  async function loadStaffData() {
+    try {
+      const response = await ApiService.getStaff();
+      DB.staff = (response.data || []).map(s => ({ ...s, id: String(s.id), name: [s.firstName, s.lastName].filter(Boolean).join(' '), surname: s.lastName, permissions: s.permissions ? (typeof s.permissions === 'string' ? JSON.parse(s.permissions) : s.permissions) : {} }));
+      renderStaff();
+    } catch (error) { console.error('Unable to load staff data:', error); renderStaff(); }
+  }
+  loadStaffData();
+  renderSkillCheckboxes([]);
+  feather.replace();
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bin · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="bin.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Bin</h1></div>
+      <div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div>
+    </header>
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Bin</h1><p>Deleted items land here first. Restore them or delete forever.</p></div>
+        <button class="btn btn-danger" onclick="emptyBin()"><i data-feather="trash-2"></i> Empty Bin</button>
+      </div>
+      <div class="card" style="padding:0;">
+        <table class="data-table">
+          <thead><tr><th>Item</th><th>Type</th><th>Deleted By</th><th>Deleted On</th><th></th></tr></thead>
+          <tbody id="bin-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="centoroapi.js"></script>
+<script src="bin.js"></script>
+<script>
+  initApp('bin.html', 'Bin');
+  function renderBin() {
+    const tbody = document.getElementById('bin-table');
+    if (!DB.trash.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:30px;">Bin is empty </td></tr>'; return; }
+    tbody.innerHTML = DB.trash.map(t => `
+      <tr>
+        <td><strong>${itemLabel(t.snapshot)}</strong></td>
+        <td><span class="badge badge-neutral">${t.collection}</span></td>
+        <td>${t.deletedBy}</td>
+        <td>${new Date(t.deletedAt).toLocaleString('en-ZA')}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-success" onclick="restore('${t.id}')">Restore</button>
+          <button class="btn btn-danger" onclick="purge('${t.id}')">Delete Forever</button>
+        </td>
+      </tr>`).join('');
+  }
+  function restore(id) { restoreFromBin(id); renderBin(); }
+  function purge(id) { if (confirm('Delete forever? This cannot be undone.')) { permanentDelete(id); renderBin(); } }
+  function emptyBin() { if (confirm('Empty the entire bin? All items will be gone forever.')) { DB.trash = []; saveDB(); renderBin(); } }
+  renderBin(); feather.replace();
+</script>
+</body>
+</html>

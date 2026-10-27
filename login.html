@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Login · Centoro Admin</title>
+<style>body { visibility: hidden; }</style>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="login.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand">Centoro<span>.</span></div>
+      <div class="tagline">Enterprise Admin Panel</div>
+    </div>
+    <form class="login-form" onsubmit="handleLogin(event)">
+      <div id="login-credentials">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@centoro.co.za" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" required>
+      </div>
+      <div class="form-group">
+        <label for="login-otp-channel">Verification method</label>
+        <select id="login-otp-channel">
+          <option value="email">Email</option>
+          <option value="sms">SMS</option>
+        </select>
+      </div>
+      </div>
+      <div id="login-otp-step" class="form-group" style="display:none;">
+        <label for="login-otp-code">Verification code</label>
+        <input type="text" id="login-otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="6-digit code">
+        <small id="login-otp-destination" style="display:block;color:#94a3b8;margin-top:6px;"></small>
+      </div>
+      <div id="login-error" role="alert" aria-live="polite" style="display:none;color:#ef4444;margin-bottom:12px;"></div>
+      <button id="login-submit" type="submit" class="btn btn-primary btn-block">Sign In</button>
+    </form>
+    <div class="login-footer">
+      Empowering Excellence. Defining Success.<br>
+      © 2026 Centoro Enterprise
+    </div>
+  </div>
+</div>
+<script src="centoroapi.js"></script>
+<script>
+let loginChallengeId = null;
+window.handleLogin = async function(e) {
+    e.preventDefault();
+    const button = document.getElementById('login-submit');
+    const errorElement = document.getElementById('login-error');
+    errorElement.style.display = 'none';
+    button.disabled = true;
+
+    try {
+    if (!loginChallengeId) {
+      button.textContent = 'Sending code...';
+      const response = await window.ApiService.login(
+        document.getElementById('login-email').value,
+        document.getElementById('login-password').value,
+        document.getElementById('login-otp-channel').value
+      );
+      if (!response || !response.success || !response.data || !response.data.challengeId) {
+        throw new Error(response && response.message ? response.message : 'Unable to start verification.');
+      }
+      loginChallengeId = response.data.challengeId;
+      document.getElementById('login-credentials').style.display = 'none';
+      document.getElementById('login-email').required = false;
+      document.getElementById('login-password').required = false;
+      document.getElementById('login-otp-step').style.display = 'block';
+      document.getElementById('login-otp-code').required = true;
+      document.getElementById('login-otp-destination').textContent = 'Code sent by ' + response.data.channel + ' to ' + response.data.destination;
+      button.textContent = 'Verify & Sign In';
+      button.disabled = false;
+      document.getElementById('login-otp-code').focus();
+        } else {
+      button.textContent = 'Verifying...';
+      await window.ApiService.verifyOtp(loginChallengeId, document.getElementById('login-otp-code').value.trim());
+      if (!window.ApiService.getToken()) throw new Error('Verification failed. Please try again.');
+      window.location.replace('index.html');
+        }
+    } catch (error) {
+        errorElement.textContent = error.message || 'Login failed. Check the API connection and try again.';
+        errorElement.style.display = 'block';
+        button.disabled = false;
+    button.textContent = loginChallengeId ? 'Verify & Sign In' : 'Sign In';
+    }
+};
+
+  if (window.ApiService && typeof window.ApiService.clearToken === 'function') window.ApiService.clearToken();
+  document.body.style.visibility = 'visible';
+</script>
+</body>
+</html>

@@ -75,8 +75,8 @@ class CentoroApiService {
             const response = await fetch(url, config);
             if (response.status === 401) {
                 this.clearToken();
-                if (!window.location.pathname.includes('admin-login.html')) {
-                    window.location.replace('admin-login.html');
+                if (!window.location.pathname.includes('login.html')) {
+                    window.location.replace('login.html');
                 }
                 throw new Error('Session expired. Please login again.');
             }
@@ -141,25 +141,25 @@ class CentoroApiService {
         };
 
         const pageCollections = {
-            'admin-index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers'],
-            'admin-projects.html': ['clients', 'projects', 'staff', 'jobCards'],
-            'admin-clients.html': ['clients', 'projects', 'invoices'],
-            'admin-staff.html': ['staff', 'projects'],
-            'admin-assets.html': ['assets', 'staff'],
-            'admin-invoices.html': ['invoices', 'clients', 'projects', 'payments'],
-            'admin-jobcards.html': ['jobCards', 'clients', 'projects', 'staff'],
-            'admin-chats.html': ['chats', 'clients'],
-            'admin-vouchers.html': ['vouchers'],
-            'admin-accounting.html': ['expenses', 'payments', 'invoices', 'bankTransactions', 'journalEntries', 'chartAccounts'],
-            'admin-payroll.html': ['payroll', 'staff'],
-            'admin-website.html': ['websiteStats', 'websiteNews', 'slides', 'prices', 'tracks', 'packs', 'samples', 'fridayDrops', 'monthlyOffers', 'portfolio'],
-            'admin-website-builder.html': ['pages', 'slides', 'websiteNews', 'prices'],
-            'admin-settings.html': ['settings'],
-            'admin-data.html': ['analytics', 'invoices', 'projects', 'clients'],
-            'admin-email.html': ['emailAccounts', 'emailCampaigns'],
-            'admin-phone.html': ['phoneLines', 'phoneContacts', 'smsProviders', 'smsCampaigns'],
-            'admin-staff-chat.html': ['staffChats', 'staff'],
-            'admin-bin.html': ['bin']
+            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers'],
+            'projects.html': ['clients', 'projects', 'staff', 'jobCards'],
+            'clients.html': ['clients', 'projects', 'invoices'],
+            'staff.html': ['staff', 'projects'],
+            'assets.html': ['assets', 'staff'],
+            'invoices.html': ['invoices', 'clients', 'projects', 'payments'],
+            'jobcards.html': ['jobCards', 'clients', 'projects', 'staff'],
+            'chats.html': ['chats', 'clients'],
+            'vouchers.html': ['vouchers'],
+            'accounting.html': ['expenses', 'payments', 'invoices', 'bankTransactions', 'journalEntries', 'chartAccounts'],
+            'payroll.html': ['payroll', 'staff'],
+            'website.html': ['websiteStats', 'websiteNews', 'slides', 'prices', 'tracks', 'packs', 'samples', 'fridayDrops', 'monthlyOffers', 'portfolio'],
+            'website-builder.html': ['pages', 'slides', 'websiteNews', 'prices'],
+            'settings.html': ['settings'],
+            'data.html': ['analytics', 'invoices', 'projects', 'clients'],
+            'email.html': ['emailAccounts', 'emailCampaigns'],
+            'phone.html': ['phoneLines', 'phoneContacts', 'smsProviders', 'smsCampaigns'],
+            'staff-chat.html': ['staffChats', 'staff'],
+            'bin.html': ['bin']
         };
 
         const collections = pageCollections[pageName] || [];
@@ -348,7 +348,7 @@ class CentoroApiService {
     }
 
     async register(userData) { return this.request('POST', '/auth/register', userData); }
-    logout() { this.clearToken(); window.location.href = 'admin-login.html'; }
+    logout() { this.clearToken(); window.location.href = 'login.html'; }
     getCurrentUser() { return this.getUser(); }
 
     // ============ DASHBOARD ============

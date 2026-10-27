@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Phone & SMS · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="phone.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+  .phone-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+  .phone-tab { padding: 10px 16px; background: transparent; color: var(--text-secondary); font-weight: 600; border: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: .85rem; }
+  .phone-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .svc-badge { display:inline-block; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:2px 10px; font-size:.75rem; margin:2px; color:var(--text-secondary); }
+
+  .speed-dial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .speed-dial-btn { background: var(--bg-elevated); border: 2px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; cursor: pointer; transition: all .2s; }
+  .speed-dial-btn:hover { border-color: var(--primary); background: var(--bg-input); }
+  .speed-dial-btn.empty { opacity: 0.5; }
+  .speed-dial-btn .num { font-size: 1.5rem; font-weight: 800; color: var(--primary); }
+  .speed-dial-btn .name { font-size: .78rem; color: var(--text-secondary); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Phone & SMS Center</h1></div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button>
+        <div class="user-avatar" id="topbar-avatar">CJ</div>
+      </div>
+    </header>
+    <div class="page-content">
+      <div class="page-header">
+        <div><h1>Phone & SMS Center</h1><p>Connect phone lines, SMS providers, manage your phone book with speed-dial, and send SMS to millions.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="openPhoneLineModal()">+ Add Phone Line</button>
+          <button class="btn btn-secondary" onclick="switchPhoneTab('compose', document.querySelector('[data-ptab=compose]'))">📱 Send SMS</button>
+        </div>
+      </div>
+
+      <div class="phone-tabs">
+        <button class="phone-tab active" data-ptab="accounts" onclick="switchPhoneTab('accounts', this)">Accounts & Ports</button>
+        <button class="phone-tab" data-ptab="phonebook" onclick="switchPhoneTab('phonebook', this)">Phone Book</button>
+        <button class="phone-tab" data-ptab="compose" onclick="switchPhoneTab('compose', this)">Compose</button>
+        <button class="phone-tab" data-ptab="history" onclick="switchPhoneTab('history', this)">SMS History</button>
+      </div>
+
+      <!-- ACCOUNTS & PORTS -->
+      <div id="ptab-accounts">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Phone Lines</div>
+            <button class="btn btn-primary" onclick="openPhoneLineModal()">+ Add Phone Line</button>
+          </div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Connect VoIP, SIP, mobile, landline, Twilio or your own phone network. Calls route through your backend PBX.</p>
+          <div id="phone-lines-list"></div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header">
+            <div class="card-title">SMS Providers</div>
+            <button class="btn btn-primary" onclick="openSmsProviderModal()">+ Connect SMS Provider</button>
+          </div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Connect Twilio, Clickatell, MessageBird, SMSPortal, Vonage or your own SMS gateway to send to millions.</p>
+          <div id="sms-providers-list"></div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header">
+            <div class="card-title">ISP / SIP Ports (Self-Setup)</div>
+            <button class="btn btn-secondary" onclick="openIspPortModal()">+ Add Port</button>
+          </div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Configure ISP ports, SIP trunks and RTP port ranges for your phone system.</p>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Port</th><th>Service</th><th>Protocol</th><th>Direction</th><th>Target</th><th>Status</th><th></th></tr></thead>
+              <tbody id="isp-ports-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHONE BOOK -->
+      <div id="ptab-phonebook" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Phone Book — Speed Dial & Contacts</div>
+            <button class="btn btn-primary" onclick="openPhoneBookModal()">+ Add Contact</button>
+          </div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Full contact list with speed-dial numbers. Shows services done for each linked client.</p>
+
+          <div class="sec-label" style="font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);font-weight:700;margin:18px 0 10px;">Speed Dial (1-9)</div>
+          <div class="speed-dial-grid" id="speed-dial-grid"></div>
+
+          <div class="sec-label" style="font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-secondary);font-weight:700;margin:18px 0 10px;">All Phone Book Contacts</div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Speed</th><th>Name</th><th>Number</th><th>Category</th><th>Services Done</th><th></th></tr></thead>
+              <tbody id="phone-book-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPOSE -->
+      <div id="ptab-compose" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Compose SMS</div></div>
+          <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Send SMS to a single contact, all active clients, all phone book contacts, or custom numbers (bulk to millions).</p>
+          <div class="form-grid">
+            <div class="form-group"><label>SMS Provider</label><select id="sms-provider"></select></div>
+            <div class="form-group"><label>From Phone Line</label><select id="sms-from"></select></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Recipient</label>
+              <select id="sms-recipient" onchange="toggleSmsCustom()">
+                <option value="all-clients">📣 All Active Clients (bulk)</option>
+                <option value="all-phonebook">📣 All Phone Book Contacts (bulk)</option>
+                <option value="single">👤 Single Client</option>
+                <option value="custom">✏️ Custom / Manual Numbers</option>
+              </select>
+            </div>
+            <div class="form-group" id="sms-single-wrap" style="display:none;"><label>Select Client</label><select id="sms-single-client"></select></div>
+            <div class="form-group" id="sms-custom-wrap" style="display:none;grid-column:1/-1;"><label>Custom Numbers (one per line)</label><textarea id="sms-custom-numbers" rows="4" placeholder="0821234567&#10;0734567890&#10;..."></textarea></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Message</label><textarea id="sms-message" rows="4" placeholder="Type your SMS..."></textarea></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-primary" onclick="sendSmsCampaign()">📱 Send SMS</button>
+            <button class="btn btn-secondary" onclick="clearSmsCompose()">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div id="ptab-history" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">SMS Campaign History</div></div>
+          <div class="card" style="padding:0;margin:0;">
+            <table class="data-table">
+              <thead><tr><th>Message</th><th>Recipients</th><th># Sent</th><th>Provider</th><th>From</th><th>Sent At</th><th>Status</th></tr></thead>
+              <tbody id="sms-campaigns-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- PHONE LINE MODAL -->
+<div class="modal-overlay" id="phone-line-modal"><div class="modal" style="max-width:560px;"><div class="modal-header"><div class="modal-title">Add Phone Line</div><button class="modal-close" onclick="closeM('phone-line-modal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group"><label>Label</label><input id="pl-label" placeholder="e.g. Main Office Line"></div>
+      <div class="form-group"><label>Phone Number</label><input id="pl-number" placeholder="+27 82 123 4567"></div>
+      <div class="form-group"><label>Type</label>
+        <select id="pl-type">
+          <option>VoIP / SIP</option><option>Mobile / GSM</option><option>Landline / PSTN</option><option>Twilio</option><option>Custom / Own Network</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Provider</label><input id="pl-provider" placeholder="e.g. Telkom, Vox, Own PBX"></div>
+      <div class="form-group"><label>SIP Server (for VoIP)</label><input id="pl-sip" placeholder="sip.provider.com"></div>
+      <div class="form-group"><label>Username</label><input id="pl-user"></div>
+      <div class="form-group"><label>Password / Secret</label><input type="password" id="pl-pass"></div>
+      <div class="form-group"><label>Extension</label><input id="pl-ext" placeholder="e.g. 100"></div>
+    </div>
+    <p style="color:var(--text-muted);font-size:.78rem;">🔒 Credentials stored encrypted. Calls route through your backend PBX / SIP trunk.</p>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeM('phone-line-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="savePhoneLine()">Connect Line</button>
+  </div>
+</div></div>
+
+<!-- SMS PROVIDER MODAL -->
+<div class="modal-overlay" id="sms-provider-modal"><div class="modal" style="max-width:520px;"><div class="modal-header"><div class="modal-title">Connect SMS Provider</div><button class="modal-close" onclick="closeM('sms-provider-modal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group"><label>Label</label><input id="sp-label" placeholder="e.g. Marketing SMS"></div>
+      <div class="form-group"><label>Provider</label>
+        <select id="sp-provider">
+          <option>Twilio</option><option>Clickatell</option><option>MessageBird</option>
+          <option>SendGrid SMS</option><option>Vonage / Nexmo</option><option>BulkSMS</option>
+          <option>SMSPortal (SA)</option><option>WinSMS</option><option>Own Gateway</option>
+        </select>
+      </div>
+      <div class="form-group"><label>API Key / Account SID</label><input id="sp-key"></div>
+      <div class="form-group"><label>API Secret / Auth Token</label><input type="password" id="sp-secret"></div>
+      <div class="form-group"><label>Sender ID / From Number</label><input id="sp-sender" placeholder="Centoro or +27..."></div>
+      <div class="form-group"><label>API Endpoint</label><input id="sp-endpoint" placeholder="https://api.twilio.com/..."></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeM('sms-provider-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveSmsProvider()">Connect</button>
+  </div>
+</div></div>
+
+<!-- ISP PORT MODAL -->
+<div class="modal-overlay" id="isp-port-modal"><div class="modal" style="max-width:520px;"><div class="modal-header"><div class="modal-title">Configure ISP / SIP Port</div><button class="modal-close" onclick="closeM('isp-port-modal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group"><label>Service Name</label><input id="ip-service" placeholder="e.g. SIP Trunk, RTP"></div>
+      <div class="form-group"><label>Port Number</label><input type="number" id="ip-port" placeholder="5060"></div>
+      <div class="form-group"><label>Port Range (optional)</label><input id="ip-range" placeholder="e.g. 10000-20000"></div>
+      <div class="form-group"><label>Protocol</label><select id="ip-protocol"><option>UDP</option><option>TCP</option><option>TLS</option><option>UDP/TCP</option></select></div>
+      <div class="form-group"><label>Direction</label><select id="ip-direction"><option>Inbound</option><option>Outbound</option><option>Both</option></select></div>
+      <div class="form-group"><label>Target / Trunk</label><input id="ip-target" placeholder="e.g. sip.telkom.net"></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeM('isp-port-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveIspPort()">Open Port</button>
+  </div>
+</div></div>
+
+<!-- PHONE BOOK MODAL -->
+<div class="modal-overlay" id="phone-book-modal"><div class="modal" style="max-width:520px;"><div class="modal-header"><div class="modal-title">Add to Phone Book</div><button class="modal-close" onclick="closeM('phone-book-modal')">✕</button></div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group"><label>Name</label><input id="pb-name"></div>
+      <div class="form-group"><label>Phone Number</label><input id="pb-number" placeholder="+27 82..."></div>
+      <div class="form-group"><label>Category</label>
+        <select id="pb-category">
+          <option>Client</option><option>Staff</option><option>Supplier</option><option>Emergency</option><option>Personal</option><option>Custom</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Speed Dial (1-99, optional)</label><input type="number" id="pb-speed" min="1" max="99"></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Link to Client (optional)</label><select id="pb-client"><option value="">— Not linked —</option></select></div>
+      <div class="form-group" style="grid-column:1/-1;"><label>Notes</label><input id="pb-notes"></div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="closeM('phone-book-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="savePhoneBookContact()">Save Contact</button>
+  </div>
+</div></div>
+
+<script src="centoroapi.js"></script>
+<script src="phone.js"></script>
+<script>
+  initApp('phone.html', 'Phone & SMS Center');
+
+  function closeM(id) { document.getElementById(id).classList.remove('active'); }
+
+  function switchPhoneTab(name, btn) {
+    document.querySelectorAll('.phone-tab').forEach(t => t.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    ['accounts','phonebook','compose','history'].forEach(x => {
+      document.getElementById('ptab-' + x).style.display = x === name ? 'block' : 'none';
+    });
+    if (name === 'compose') renderSmsComposeOptions();
+    if (name === 'history') renderSmsHistory();
+    if (name === 'phonebook') { renderPhoneBook(); renderSpeedDial(); }
+    if (name === 'accounts') renderAccountsTab();
+  }
+
+  /* ===== HELPERS ===== */
+  function getClientServices(clientId) {
+    const set = new Set();
+    (DB.invoices || []).filter(i => i.clientId === clientId).forEach(i => { (i.items||[]).forEach(it => { if (it.description) set.add(it.description); }); });
+    (DB.projects || []).filter(p => p.clientId === clientId).forEach(p => { if (p.service) set.add(p.service); });
+    return [...set];
+  }
+
+  /* ===== ACCOUNTS TAB ===== */
+  function renderPhoneLines() {
+    document.getElementById('phone-lines-list').innerHTML = (DB.phoneLines||[]).map(p => `<div class="int-card">
+      <div style="flex:1;min-width:220px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <strong style="color:var(--text-primary);">${p.label}</strong>
+          <span class="badge badge-info">${p.type}</span>
+          <span class="badge badge-success">Active</span>
+        </div>
+        <small style="color:var(--text-muted);">📞 ${p.number} · ${p.provider || '—'}${p.sip ? ' · SIP: ' + p.sip : ''}${p.ext ? ' · Ext ' + p.ext : ''}</small>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="dialNumber('${(p.number||'').replace(/'/g,"\\'")}')">📞 Test Call</button>
+        <button class="btn btn-danger" onclick="removePhoneLine('${p.id}')">Disconnect</button>
+      </div>
+    </div>`).join('') || '<p style="color:var(--text-muted);font-size:.85rem;">No phone lines configured. Add VoIP, SIP, mobile or landline.</p>';
+  }
+  function renderSmsProviders() {
+    document.getElementById('sms-providers-list').innerHTML = (DB.smsProviders||[]).map(p => `<div class="int-card">
+      <div style="flex:1;min-width:220px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <strong style="color:var(--text-primary);">${p.label||p.provider}</strong>
+          <span class="badge ${p.provider === 'Twilio' ? 'badge-warning' : 'badge-neutral'}">${p.provider === 'Twilio' ? 'Configured · not tested' : 'Delivery adapter unavailable'}</span>
+        </div>
+        <small style="color:var(--text-muted);">${p.provider} · From: ${p.senderId || p.sender || '—'}</small>
+      </div>
+      <button class="btn btn-danger" onclick="removeSmsProvider('${p.id}')">Disconnect</button>
+    </div>`).join('') || '<p style="color:var(--text-muted);font-size:.85rem;">No SMS providers connected.</p>';
+  }
+  function renderIspPorts() {
+    document.getElementById('isp-ports-table').innerHTML = (DB.ispPorts||[]).map(p => `<tr>
+      <td><strong>${p.port}</strong>${p.range ? ' – ' + p.range : ''}</td>
+      <td>${p.service || '—'}</td><td>${p.protocol}</td><td>${p.direction}</td><td>${p.target || '—'}</td>
+      <td><span class="badge badge-success">Open</span></td>
+      <td><button class="btn btn-danger" onclick="removeIspPort('${p.id}')">✕</button></td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:16px;">No ISP ports configured.</td></tr>';
+  }
+  function renderAccountsTab() { renderPhoneLines(); renderSmsProviders(); renderIspPorts(); }
+
+  function openPhoneLineModal() {
+    ['pl-label','pl-number','pl-provider','pl-sip','pl-user','pl-pass','pl-ext'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('phone-line-modal').classList.add('active');
+  }
+  function savePhoneLine() {
+    const label = document.getElementById('pl-label').value.trim();
+    const number = document.getElementById('pl-number').value.trim();
+    if (!label || !number) { alert('Label and number required'); return; }
+    DB.phoneLines = DB.phoneLines || [];
+    DB.phoneLines.push({
+      id: nextId('PLN','phoneLines'), label, number,
+      type: document.getElementById('pl-type').value,
+      provider: document.getElementById('pl-provider').value,
+      sip: document.getElementById('pl-sip').value,
+      username: document.getElementById('pl-user').value,
+      password: document.getElementById('pl-pass').value,
+      ext: document.getElementById('pl-ext').value,
+      status: 'active'
+    });
+    saveDB(); closeM('phone-line-modal'); renderPhoneLines();
+    alert('✅ Phone line "' + label + '" connected.');
+  }
+  function removePhoneLine(id) { if (!confirm('Disconnect this line?')) return; DB.phoneLines = DB.phoneLines.filter(p => p.id !== id); saveDB(); renderPhoneLines(); }
+  function dialNumber(num) { alert('📞 Calling ' + num + ' via your connected phone line. Call routes through your backend PBX / SIP trunk.'); }
+
+  function openSmsProviderModal() {
+    ['sp-label','sp-key','sp-secret','sp-sender','sp-endpoint'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('sms-provider-modal').classList.add('active');
+  }
+  async function saveSmsProvider() {
+    const key = document.getElementById('sp-key').value.trim();
+    if (!key) { alert('API key required'); return; }
+    DB.smsProviders = DB.smsProviders || [];
+    const provider = {
+      label: document.getElementById('sp-label').value.trim(),
+      provider: document.getElementById('sp-provider').value,
+      apiKey: key, apiSecret: document.getElementById('sp-secret').value,
+      senderId: document.getElementById('sp-sender').value.trim(),
+      apiEndpoint: document.getElementById('sp-endpoint').value.trim(),
+      status: 'connected'
+    };
+    DB.smsProviders.push(provider);
+    saveDB();
+    try {
+      await ApiService.persistQueue;
+      await ApiService.syncAdminData('phone.html', DB);
+    } catch (error) {
+      alert(error.message || 'Unable to connect SMS provider to the API.');
+      return;
+    }
+    closeM('sms-provider-modal'); renderAccountsTab(); renderSmsComposeOptions(); renderSmsHistory();
+    alert('SMS provider saved. Delivery is available when the selected provider has a supported backend adapter.');
+  }
+  async function removeSmsProvider(id) {
+    if (!confirm('Disconnect?')) return;
+    try {
+      await ApiService.deleteSmsProvider(Number(id));
+      await ApiService.syncAdminData('phone.html', DB);
+      renderAccountsTab(); renderSmsComposeOptions();
+    } catch (error) { alert(error.message || 'Unable to disconnect SMS provider.'); }
+  }
+
+  function openIspPortModal() {
+    ['ip-service','ip-port','ip-range','ip-target'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('isp-port-modal').classList.add('active');
+  }
+  function saveIspPort() {
+    const port = document.getElementById('ip-port').value;
+    if (!port) { alert('Port required'); return; }
+    DB.ispPorts = DB.ispPorts || [];
+    DB.ispPorts.push({
+      id: nextId('ISP','ispPorts'),
+      service: document.getElementById('ip-service').value,
+      port, range: document.getElementById('ip-range').value,
+      protocol: document.getElementById('ip-protocol').value,
+      direction: document.getElementById('ip-direction').value,
+      target: document.getElementById('ip-target').value,
+      status: 'open'
+    });
+    saveDB(); closeM('isp-port-modal'); renderIspPorts();
+    alert('✅ ISP port configured.');
+  }
+  function removeIspPort(id) { if (!confirm('Remove?')) return; DB.ispPorts = DB.ispPorts.filter(p => p.id !== id); saveDB(); renderIspPorts(); }
+
+  /* ===== PHONE BOOK ===== */
+  function renderPhoneBook() {
+    document.getElementById('phone-book-table').innerHTML = (DB.phoneBook||[]).map(c => {
+      const services = c.clientId ? getClientServices(c.clientId) : [];
+      return `<tr>
+        <td><strong>${c.speedDial ? '#' + c.speedDial : '—'}</strong></td>
+        <td><strong>${c.name}</strong></td>
+        <td>${c.number}</td>
+        <td><span class="badge badge-neutral">${c.category}</span></td>
+        <td>${services.length ? services.slice(0,3).map(s => `<span class="svc-badge">${s}</span>`).join(' ') : '<span style="color:var(--text-muted);">—</span>'}</td>
+        <td>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="btn btn-primary" style="padding:4px 8px;font-size:.78rem;" onclick="dialNumber('${(c.number||'').replace(/'/g,"\\'")}')">📞 Call</button>
+            <button class="btn btn-secondary" style="padding:4px 8px;font-size:.78rem;" onclick="quickSms('${(c.number||'').replace(/'/g,"\\'")}')">📱 SMS</button>
+            <button class="btn btn-danger" style="padding:4px 8px;font-size:.78rem;" onclick="removePhoneBookContact('${c.id}')">✕</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:16px;">No phone book contacts yet. Add your first contact above.</td></tr>';
+  }
+  function renderSpeedDial() {
+    const sd = (DB.phoneBook||[]).filter(c => c.speedDial).sort((a,b) => a.speedDial - b.speedDial).slice(0, 9);
+    const grid = Array.from({length: 9}, (_, i) => i + 1);
+    document.getElementById('speed-dial-grid').innerHTML = grid.map(n => {
+      const c = sd.find(x => x.speedDial === n);
+      return `<div class="speed-dial-btn ${c ? '' : 'empty'}" ${c ? `onclick="dialNumber('${(c.number||'').replace(/'/g,"\\'")}')"` : ''}>
+        <div class="num">${n}</div>
+        <div class="name">${c ? c.name : 'Empty'}</div>
+      </div>`;
+    }).join('');
+  }
+  function quickSms(num) {
+    switchPhoneTab('compose', document.querySelector('[data-ptab="compose"]'));
+    document.getElementById('sms-recipient').value = 'custom';
+    toggleSmsCustom();
+    document.getElementById('sms-custom-numbers').value = num;
+  }
+  function openPhoneBookModal() {
+    ['pb-name','pb-number','pb-speed','pb-notes'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('pb-client').innerHTML = '<option value="">— Not linked —</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    document.getElementById('phone-book-modal').classList.add('active');
+  }
+  function savePhoneBookContact() {
+    const name = document.getElementById('pb-name').value.trim();
+    const number = document.getElementById('pb-number').value.trim();
+    if (!name || !number) { alert('Name and number required'); return; }
+    DB.phoneBook = DB.phoneBook || [];
+    DB.phoneBook.push({
+      id: nextId('PBK','phoneBook'), name, number,
+      category: document.getElementById('pb-category').value,
+      speedDial: parseInt(document.getElementById('pb-speed').value) || null,
+      clientId: document.getElementById('pb-client').value,
+      notes: document.getElementById('pb-notes').value
+    });
+    saveDB(); closeM('phone-book-modal'); renderPhoneBook(); renderSpeedDial();
+    alert('✅ Contact "' + name + '" added to phone book.');
+  }
+  function removePhoneBookContact(id) { if (!confirm('Remove?')) return; DB.phoneBook = DB.phoneBook.filter(c => c.id !== id); saveDB(); renderPhoneBook(); renderSpeedDial(); }
+
+  /* ===== COMPOSE ===== */
+  function renderSmsComposeOptions() {
+    document.getElementById('sms-provider').innerHTML = (DB.smsProviders||[]).length
+      ? DB.smsProviders.map(p => `<option value="${p.id}">${p.label||p.provider}</option>`).join('')
+      : '<option value="">No provider — connect one first</option>';
+    document.getElementById('sms-from').innerHTML = (DB.phoneLines||[]).length
+      ? DB.phoneLines.map(p => `<option value="${p.id}">${p.label} (${p.number})</option>`).join('')
+      : '<option value="">No line — add one first</option>';
+    document.getElementById('sms-single-client').innerHTML = '<option value="">Select client...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name} (${c.phone || 'no phone'})</option>`).join('');
+  }
+  function toggleSmsCustom() {
+    const v = document.getElementById('sms-recipient').value;
+    document.getElementById('sms-custom-wrap').style.display = v === 'custom' ? 'block' : 'none';
+    document.getElementById('sms-single-wrap').style.display = v === 'single' ? 'block' : 'none';
+  }
+  function clearSmsCompose() {
+    document.getElementById('sms-message').value = '';
+    document.getElementById('sms-custom-numbers').value = '';
+  }
+  async function sendSmsCampaign() {
+    const recipient = document.getElementById('sms-recipient').value;
+    const message = document.getElementById('sms-message').value.trim();
+    const providerId = document.getElementById('sms-provider').value;
+    if (!message) { alert('Message required'); return; }
+    if (!providerId) { alert('Connect an SMS provider first (in Accounts tab)'); return; }
+    const prov = DB.smsProviders.find(p => String(p.id) === String(providerId));
+    const fromLine = (DB.phoneLines||[]).find(p => p.id === document.getElementById('sms-from').value);
+    let label = '', recipients = [];
+    if (recipient === 'all-clients') {
+      label = 'All Active Clients';
+      recipients = DB.clients.filter(c => c.status === 'active' && c.phone).map(c => c.phone);
+    }
+    else if (recipient === 'all-phonebook') { label = 'Phone Book'; recipients = (DB.phoneBook||[]).map(c => c.number).filter(Boolean); }
+    else if (recipient === 'single') {
+      const cid = document.getElementById('sms-single-client').value;
+      if (!cid) { alert('Select a client'); return; }
+      const c = getClient(cid);
+      if (!c || !c.phone) { alert('The selected client does not have a phone number.'); return; }
+      label = c ? c.name : 'Client';
+      recipients = [c.phone];
+    } else {
+      label = 'Custom';
+      recipients = document.getElementById('sms-custom-numbers').value.split(/\r?\n/).map(number => number.trim()).filter(Boolean);
+    }
+    recipients = [...new Set(recipients)];
+    if (!recipients.length) { alert('No recipients with phone numbers were found.'); return; }
+    try {
+      const response = await ApiService.sendSmsCampaign({
+        providerId: Number(providerId), message, recipient: label, recipients,
+        recipientsCount: recipients.length,
+        fromLine: fromLine ? (fromLine.label + ' (' + fromLine.number + ')') : (prov.senderId || '')
+      });
+      if (!response || response.success !== true) throw new Error(response && response.message ? response.message : 'SMS provider did not accept the campaign.');
+      await ApiService.syncAdminData('phone.html', DB);
+      document.getElementById('sms-message').value = '';
+      renderSmsHistory();
+      alert('SMS sent to ' + recipients.length + ' recipient(s).');
+    } catch (error) { alert(error.message || 'Unable to send SMS. Check the provider credentials and try again.'); }
+  }
+
+  /* ===== HISTORY ===== */
+  function renderSmsHistory() {
+    document.getElementById('sms-campaigns-table').innerHTML = (DB.smsCampaigns||[]).slice().reverse().map(c => `<tr>
+      <td><strong>${(c.message||'').slice(0,50)}${(c.message||'').length>50?'...':''}</strong></td>
+      <td>${c.recipient}</td>
+      <td>${c.recipientsCount||0}</td>
+      <td>${c.provider}</td>
+      <td>${c.fromLine || '—'}</td>
+      <td>${new Date(c.sentAt).toLocaleString('en-ZA')}</td>
+      <td><span class="badge badge-success">${c.status}</span></td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:16px;">No SMS sent yet.</td></tr>';
+  }
+
+  /* ===== INIT ===== */
+  renderAccountsTab();
+  renderPhoneBook();
+  renderSpeedDial();
+  renderSmsComposeOptions();
+  renderSmsHistory();
+  feather.replace();
+</script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Website · Centoro Admin</title>
+<script>
+/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
+(function() {
+  try {
+    var raw = localStorage.getItem('centoro_admin_db_v7');
+    if (!raw) return;
+    var db = JSON.parse(raw);
+    var t = (db.settings && db.settings.theme) || {};
+
+    function isLight(hex) {
+      try {
+        var c = String(hex).replace('#', '').trim();
+        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
+        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+      } catch (e) { return false; }
+    }
+
+    var root = document.documentElement;
+
+    if (t.primary) root.style.setProperty('--primary', t.primary);
+    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
+    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
+    if (t.accent) root.style.setProperty('--accent', t.accent);
+    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
+    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
+
+    if (t.bgBase && isLight(t.bgBase)) {
+      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
+      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
+      root.style.setProperty('--border', t.border || '#e2e8f0');
+      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
+      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
+      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
+    } else {
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-input');
+      root.style.removeProperty('--border');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-muted');
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="website.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+  .tab { padding: 10px 16px; background: transparent; color: var(--text-secondary); font-weight: 600; border: none; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: .85rem; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .card { overflow: hidden; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+  .table-wrap .data-table { min-width: 840px; }
+  .genre-chip { display: inline-block; background: var(--bg-elevated); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px; font-size: .8rem; margin: 0 6px 6px 0; cursor: pointer; color: var(--text-secondary); }
+  .genre-chip.active { background: var(--primary); color: #0f172a; border-color: var(--primary); font-weight: 700; }
+  .thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated); flex-shrink: 0; }
+  .row-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .row-item .left { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 220px; }
+  .work-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+  .work-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .work-card img { width: 100%; height: 120px; object-fit: cover; background: var(--bg-elevated); }
+  .work-card.hidden-work img { opacity: .35; }
+  .work-card .info { padding: 10px; font-size: .85rem; }
+  .play-btn { background: var(--primary); color: #0f172a; border: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: .8rem; flex-shrink: 0; }
+  .post-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .slide-thumbs { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .slide-thumb { width: 70px; height: 45px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .pk-sample-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: .78rem; margin: 0 6px 6px 0; }
+  .hint-note { background: rgba(59,130,246,.08); border: 1px solid var(--border); color: var(--text-secondary); border-radius: 8px; padding: 8px 12px; font-size: .8rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
+    <nav class="sidebar-nav" id="sidebar-nav"></nav>
+    <div class="sidebar-user" id="sidebar-user"></div>
+  </aside>
+  <main class="main-content">
+    <header class="topbar"><div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Website</h1></div><div class="topbar-right"><button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button><div class="user-avatar" id="topbar-avatar">CJ</div></div></header>
+    <div class="page-content">
+      <div class="page-header"><div><h1>Website Control</h1><p>Music, Friday & Monthly Madness, socials, work, news, slides, prices & accounts.</p></div></div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('music')">Music Store</button>
+        <button class="tab" onclick="switchTab('friday')">Friday Madness</button>
+        <button class="tab" onclick="switchTab('monthly')">Monthly Madness</button>
+        <button class="tab" onclick="switchTab('social')">Social Hub</button>
+        <button class="tab" onclick="switchTab('work')">Our Work</button>
+        <button class="tab" onclick="switchTab('news')">News</button>
+        <button class="tab" onclick="switchTab('slides')">Slides</button>
+        <button class="tab" onclick="switchTab('prices')">Prices</button>
+        <button class="tab" onclick="switchTab('accounts')">Accounts</button>
+        <button class="tab" onclick="switchTab('cloud')">Cloud Files</button>
+      </div>
+
+      <div id="tab-music">
+        <div class="card"><div class="card-header"><div class="card-title">Genres — click to filter uploads</div><div style="display:flex;gap:6px;"><input id="new-genre" placeholder="New genre e.g. EDM..." style="padding:6px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"><button class="btn btn-secondary" onclick="addGenre()">+ Add Genre</button></div></div><div id="genre-chips"></div></div>
+        <div class="card"><div class="card-header"><div class="card-title">Beats / Tracks — all lease types · ▶ listen · EDIT</div><button class="btn btn-primary" onclick="openTrackModal()">+ Upload Track</button></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th></th><th></th><th>Title</th><th>Genre</th><th>BPM/Key</th><th>Non-Excl</th><th>Royalty-Free</th><th>Exclusive</th><th></th></tr></thead><tbody id="tracks-table"></tbody></table></div></div>
+        <div class="grid-2">
+          <div class="card"><div class="card-header"><div class="card-title">Packs — add extra samples anytime · EDIT</div><button class="btn btn-primary" onclick="openPackModal()">+ Add Pack</button></div><div id="packs-list"></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Samples / Loops / One-Shots / Instruments</div><button class="btn btn-primary" onclick="openSampleModal()">+ Upload Sample</button></div><div id="samples-list"></div></div>
+        </div>
+      </div>
+
+      <div id="tab-friday" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">Friday Drops · Specials · Vouchers</div><button class="btn btn-primary" onclick="openSeriesModal('friday')">+ Add Friday Item</button></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th></th><th></th><th>Title</th><th>Type</th><th>Category / Service</th><th>Date</th><th>Expires</th><th>Status</th><th></th></tr></thead><tbody id="friday-table"></tbody></table></div></div></div>
+
+      <div id="tab-monthly" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">Monthly Specials · Vouchers · Services</div><button class="btn btn-primary" onclick="openSeriesModal('monthly')">+ Add Monthly Item</button></div><div id="monthly-list"></div></div></div>
+
+      <div id="tab-social" style="display:none;">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px;">Create Post</div>
+            <div class="form-group"><label>Post text</label><textarea id="sh-text" rows="5" placeholder="e.g. 🔥 New Friday Madness drop is LIVE!"></textarea></div>
+            <div class="form-group"><label>Image (optional)</label><input type="file" id="sh-image" accept="image/*"></div>
+            <div class="form-group"><label>Publish to</label><div id="sh-platforms" style="display:flex;gap:8px;flex-wrap:wrap;"></div></div>
+            <button class="btn btn-primary" onclick="publishPost()"><i data-feather="send"></i> Post Now</button>
+            <div class="hint-note">🔌 Connect / disconnect platforms in <strong>Settings → Integrations & Connections</strong>.</div>
+          </div>
+          <div class="card"><div class="card-title" style="margin-bottom:12px;">Post History</div><div id="sh-feed"></div></div>
+        </div>
+      </div>
+
+      <div id="tab-work" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">Our Work / Portfolio — edit · hide/unhide · delete</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><select id="work-filter" onchange="renderWorks()" style="padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"><option value="">All</option><option>Photography</option><option>Videography</option><option>Graphic Design</option><option>Web & App</option></select><button class="btn btn-primary" onclick="openWorkModal()">+ Upload Work</button></div></div>
+        <div class="work-grid" id="works-grid"></div></div></div>
+
+      <div id="tab-news" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">News — view / edit / hide / delete</div><button class="btn btn-primary" onclick="openNewsModal()">+ Add Article</button></div><div id="news-list"></div></div></div>
+
+      <div id="tab-slides" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">Home Slides — Desktop + Tablet + Phone</div><button class="btn btn-primary" onclick="openSlideModal()">+ Add Slide</button></div><div id="slides-list"></div></div></div>
+
+      <div id="tab-prices" style="display:none;"><div class="card"><div class="card-header"><div class="card-title">Price List (All Front-End Services)</div><button class="btn btn-primary" onclick="openPriceModal()">+ Add Custom Price</button></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Service</th><th>Price</th><th>Type</th><th></th></tr></thead><tbody id="price-table"></tbody></table></div></div></div>
+
+      <div id="tab-accounts" style="display:none;">
+        <div class="card"><div class="card-header"><div class="card-title">Portal Accounts (search / block / remove)</div></div>
+          <div style="padding:0 12px 12px;"><input id="acc-search" placeholder="Search by name, email, phone..." oninput="renderAccounts()" style="width:100%;padding:10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);"></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Country</th><th>Status</th><th></th></tr></thead><tbody id="accounts-table"></tbody></table></div></div>
+        <div class="hint-note" style="margin:0;">🔌 Business account connections & API keys live in <strong>Settings → Integrations & Connections</strong>.</div>
+      </div>
+
+      <div id="tab-cloud" style="display:none;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Google Cloud Storage · centoroenterprise</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <select id="cloud-folder" onchange="loadCloudFiles()" aria-label="Bucket folder">
+                <option value="applicationsce">Applications</option><option value="designsce">Designs</option>
+                <option value="fridaymadnessce">Friday Madness</option><option value="instrumentalsce">Instrumentals</option>
+                <option value="monthlymadnessce">Monthly Madness</option><option value="musicce">Music</option>
+                <option value="samplepacksce">Sample Packs</option><option value="samplesce">Samples</option>
+                <option value="videosce">Videos</option><option value="websitesce">Websites</option>
+              </select>
+              <label class="btn btn-primary" style="cursor:pointer;"><i data-feather="upload"></i> Upload<input id="cloud-upload" type="file" multiple style="display:none;" onchange="uploadCloudFiles(event)"></label>
+              <button class="btn btn-secondary" onclick="loadCloudFiles()" title="Refresh folder"><i data-feather="refresh-cw"></i></button>
+            </div>
+          </div>
+          <p id="cloud-status" style="color:var(--text-secondary);font-size:.85rem;margin-bottom:12px;">Choose a folder to browse stored files.</p>
+          <div id="cloud-files-list"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- TRACK MODAL -->
+<div class="modal-overlay" id="track-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="track-modal-title">Upload Track</div><button class="modal-close" onclick="closeM('track-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Title</label><input id="tk-title"></div>
+    <div class="form-group"><label>Genre</label><select id="tk-genre"></select></div>
+    <div class="form-group"><label>BPM</label><input type="number" id="tk-bpm"></div>
+    <div class="form-group"><label>Key</label><input id="tk-key"></div>
+    <div class="form-group"><label>Non-Exclusive Lease (R)</label><input type="number" id="tk-lease" value="450"></div>
+    <div class="form-group"><label>Royalty-Free (R)</label><input type="number" id="tk-rf" value="1200"></div>
+    <div class="form-group"><label>Exclusive (R)</label><input type="number" id="tk-excl" value="2500"></div>
+    <div class="form-group"><label>Audio (mp3/wav/mp4)</label><input type="file" id="tk-file" accept="audio/*,video/*,.mp3,.wav,.mp4"></div>
+    <div class="form-group"><label>Cover</label><input type="file" id="tk-cover" accept="image/*"></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('track-modal')">Cancel</button><button class="btn btn-primary" onclick="saveTrack()">Save Track</button></div></div></div>
+
+<!-- PACK MODAL -->
+<div class="modal-overlay" id="pack-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="pack-modal-title">Add Pack</div><button class="modal-close" onclick="closeM('pack-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Pack Title</label><input id="pk-title"></div>
+    <div class="form-group"><label>Genre</label><select id="pk-genre"></select></div>
+    <div class="form-group"><label>Non-Exclusive (R)</label><input type="number" id="pk-lease" value="450"></div>
+    <div class="form-group"><label>Exclusive (R)</label><input type="number" id="pk-excl" value="2500"></div>
+    <div class="form-group"><label>Cover</label><input type="file" id="pk-cover" accept="image/*"></div>
+    <div class="form-group"><label>Preview audio</label><input type="file" id="pk-audio" accept="audio/*,.mp3,.wav"></div>
+  </div>
+  <div class="form-group"><label>Samples in this Pack (add more anytime)</label>
+    <div id="pk-samples-list"></div>
+    <div style="display:flex;gap:6px;margin-top:6px;"><input id="pk-new-sample" placeholder="Sample name e.g. Drum Loop 1" style="flex:1;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"><button type="button" class="btn btn-secondary" onclick="addPackSample()">+ Add Sample</button></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('pack-modal')">Cancel</button><button class="btn btn-primary" onclick="savePack()">Save Pack</button></div></div></div>
+
+<!-- SAMPLE MODAL -->
+<div class="modal-overlay" id="sample-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="sample-modal-title">Upload Sample</div><button class="modal-close" onclick="closeM('sample-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Title</label><input id="sm-title"></div>
+    <div class="form-group"><label>Category</label><select id="sm-cat"><option>Loops</option><option>One-Shots</option><option>Packs</option><option>Instruments</option></select></div>
+    <div class="form-group"><label>Genre</label><select id="sm-genre"></select></div>
+    <div class="form-group"><label>BPM</label><input type="number" id="sm-bpm"></div>
+    <div class="form-group"><label>Price (R)</label><input type="number" id="sm-price" value="150"></div>
+    <div class="form-group"><label>Audio</label><input type="file" id="sm-file" accept="audio/*,.mp3,.wav"></div>
+    <div class="form-group"><label>Cover Image</label><input type="file" id="sm-cover" accept="image/*"></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('sample-modal')">Cancel</button><button class="btn btn-primary" onclick="saveSample()">Save Sample</button></div></div></div>
+
+<!-- SERIES MODAL -->
+<div class="modal-overlay" id="series-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="series-modal-title">Add Item</div><button class="modal-close" onclick="closeM('series-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Title</label><input id="sr-title" placeholder="e.g. Summer Vibes / Wedding Special / R100 Voucher"></div>
+    <div class="form-group"><label>Item Type</label><select id="sr-type" onchange="seriesTypeChange()"><option value="audio">Audio Drop / Beat</option><option value="service">Service / Production Special</option><option value="voucher">Voucher / Discount Code</option></select></div>
+    <div class="form-group"><label>Category / Genre / Service</label><select id="sr-cat"></select></div>
+    <div class="form-group" id="sr-month-wrap"><label>Month</label><input type="month" id="sr-month"></div>
+    <div class="form-group" id="sr-date-wrap"><label>Drop Date</label><input type="date" id="sr-date"></div>
+    <div class="form-group"><label>Expiry Date (optional)</label><input type="date" id="sr-expiry"></div>
+    <div class="form-group" id="sr-bpm-wrap"><label>BPM (audio only)</label><input type="number" id="sr-bpm"></div>
+    <div class="form-group" id="sr-disc-wrap"><label>Discount %</label><input type="number" id="sr-disc" value="50"></div>
+    <div class="form-group" id="sr-slots-wrap"><label>Slots</label><input type="number" id="sr-slots" value="5"></div>
+    <div class="form-group"><label>Cover Image</label><input type="file" id="sr-cover" accept="image/*"></div>
+    <div class="form-group" id="sr-audio-wrap"><label>Audio File</label><input type="file" id="sr-audio" accept="audio/*,.mp3,.wav"></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('series-modal')">Cancel</button><button class="btn btn-primary" onclick="saveSeries()">Save Item</button></div></div></div>
+
+<!-- WORK MODAL -->
+<div class="modal-overlay" id="work-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="work-modal-title">Upload Work</div><button class="modal-close" onclick="closeM('work-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid">
+    <div class="form-group"><label>Main Category</label><select id="wk-cat" onchange="fillSubs()"><option>Photography</option><option>Videography</option><option>Graphic Design</option><option>Web & App</option></select></div>
+    <div class="form-group"><label>Subcategory</label><select id="wk-sub"></select></div>
+    <div class="form-group" style="grid-column:1/-1;"><label>Project Title</label><input id="wk-title"></div>
+    <div class="form-group" style="grid-column:1/-1;"><label>Image</label><input type="file" id="wk-image" accept="image/*,.psd,.ai"></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('work-modal')">Cancel</button><button class="btn btn-primary" onclick="saveWork()">Save Work</button></div></div></div>
+
+<!-- NEWS MODAL -->
+<div class="modal-overlay" id="news-modal"><div class="modal"><div class="modal-header"><div class="modal-title" id="news-modal-title">Add Article</div><button class="modal-close" onclick="closeM('news-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-grid"><div class="form-group"><label>Title</label><input id="nw-title"></div><div class="form-group"><label>Category</label><select id="nw-cat"><option>Events</option><option>Monthly Madness</option><option>Behind the Scenes</option><option>Community</option><option>Product Launches</option></select></div><div class="form-group"><label>Image size</label><select id="nw-size"><option value="wide">Wide (16:9)</option><option value="square">Square</option><option value="tall">Tall (4:5)</option><option value="small">Thumbnail</option></select></div><div class="form-group"><label>Image</label><input type="file" id="nw-image" accept="image/*"></div></div><div class="form-group"><label>Body</label><textarea id="nw-body" rows="4"></textarea></div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('news-modal')">Cancel</button><button class="btn btn-primary" onclick="saveNews()">Publish / Save</button></div></div></div>
+
+<!-- SLIDE MODAL -->
+<div class="modal-overlay" id="slide-modal"><div class="modal" style="max-width:600px;"><div class="modal-header"><div class="modal-title" id="slide-modal-title">Add Slide</div><button class="modal-close" onclick="closeM('slide-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-group"><label>Slide Title</label><input id="sl-title"></div>
+  <div class="form-grid">
+    <div class="form-group"><label>Desktop (1920x1080)</label><input type="file" id="sl-desktop" accept="image/*"></div>
+    <div class="form-group"><label>Tablet (1024x768)</label><input type="file" id="sl-tablet" accept="image/*"></div>
+    <div class="form-group"><label>Phone (750x1334)</label><input type="file" id="sl-phone" accept="image/*"></div>
+  </div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('slide-modal')">Cancel</button><button class="btn btn-primary" onclick="saveSlide()">Save Slide</button></div></div></div>
+
+<!-- PRICE MODAL -->
+<div class="modal-overlay" id="price-modal"><div class="modal" style="max-width:480px;"><div class="modal-header"><div class="modal-title" id="price-modal-title">Add Price</div><button class="modal-close" onclick="closeM('price-modal')">✕</button></div>
+  <div class="modal-body"><div class="form-group"><label>Service</label><select id="pr-service-sel" onchange="togglePrCustom()"><option value="">-- Select --</option><option value="custom">✏️ Custom...</option></select></div>
+  <div class="form-group" id="pr-custom-wrap" style="display:none;"><label>Custom Service</label><input id="pr-custom"></div>
+  <div class="form-group"><label>Price (ZAR)</label><input type="number" id="pr-price"></div>
+  <div class="form-group"><label>Type</label><select id="pr-type"><option value="project">project</option><option value="product">product</option><option value="hourly">hourly</option></select></div></div>
+  <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM('price-modal')">Cancel</button><button class="btn btn-primary" onclick="savePrice()">Save</button></div></div></div>
+
+<script src="centoroapi.js"></script>
+<script src="website.js"></script>
+<script>
+  initApp('website.html', 'Website');
+  if (!DB.music) DB.music = { genres: [], tracks: [], packs: [], samples: [] };
+  if (!DB.fridayDrops) DB.fridayDrops = [];
+  if (!DB.monthlyOffers) DB.monthlyOffers = [];
+  if (!DB.socialPosts) DB.socialPosts = [];
+  if (!DB.works) DB.works = [];
+  if (!DB.website) DB.website = { slides: [], news: [], priceList: [] };
+  if (!DB.website.news) DB.website.news = [];
+  if (!DB.website.slides) DB.website.slides = [];
+  if (!DB.website.priceList) DB.website.priceList = [];
+  if (!DB.portalAccounts) DB.portalAccounts = [];
+
+  const SUBS = { 'Photography': ['Weddings','Photoshoots','Matric Ball','Park Jams','Corporate','Community'], 'Videography': ['Music Videos','Event Videos','Promo Videos','Wedding Films','Park Jam Recaps'], 'Graphic Design': ['Album Covers','Flyers','Posters','Logos','Social Media'], 'Web & App': ['Websites','Web Apps','Mobile Apps','E-Commerce','UI/UX Design'] };
+
+  function closeM(id) { document.getElementById(id).classList.remove('active'); }
+  function switchTab(t) {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    event.target.classList.add('active');
+    ['music','friday','monthly','social','work','news','slides','prices','accounts','cloud'].forEach(x => document.getElementById('tab-' + x).style.display = x === t ? 'block' : 'none');
+    if (t === 'cloud') loadCloudFiles();
+  }
+
+  function escapeCloudText(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+  }
+  async function loadCloudFiles() {
+    const folder = document.getElementById('cloud-folder').value;
+    const status = document.getElementById('cloud-status');
+    const list = document.getElementById('cloud-files-list');
+    status.textContent = 'Loading ' + folder + '/';
+    try {
+      const response = await ApiService.listStorageFiles(folder);
+      const files = response.data || [];
+      list.innerHTML = files.map(file => `<div class="row-item"><div class="left"><i data-feather="file"></i><div><strong>${escapeCloudText(file.fileName)}</strong><br><small style="color:var(--text-muted);">${escapeCloudText(file.contentType || 'File')} · ${Number(file.size || 0).toLocaleString()} bytes</small></div></div><div style="display:flex;gap:6px;"><a class="btn btn-secondary" href="${API_BASE_URL.replace(/\/api$/, '')}${file.url}" target="_blank" rel="noopener" title="Open file"><i data-feather="external-link"></i></a><button class="btn btn-danger" data-cloud-object="${escapeCloudText(file.name)}" title="Delete file"><i data-feather="trash-2"></i></button></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">This folder is empty.</p>';
+      list.onclick = event => {
+        const button = event.target.closest('[data-cloud-object]');
+        if (button) deleteCloudFile(folder, button.dataset.cloudObject);
+      };
+      status.textContent = files.length + ' file(s) in ' + folder + '/';
+      if (window.feather) feather.replace();
+    } catch (error) {
+      list.innerHTML = '';
+      status.textContent = error.message || 'Unable to read this bucket folder. Check API credentials and bucket permissions.';
+    }
+  }
+  async function deleteCloudFile(folder, objectName) {
+    if (!confirm('Permanently delete this file from ' + folder + '?')) return;
+    const status = document.getElementById('cloud-status');
+    status.textContent = 'Deleting file…';
+    try {
+      await ApiService.deleteStorageFile(folder, objectName);
+      await loadCloudFiles();
+    } catch (error) {
+      status.textContent = error.message || 'Unable to delete the cloud file.';
+    }
+  }
+  async function uploadCloudFiles(event) {
+    const files = [...event.target.files];
+    const folder = document.getElementById('cloud-folder').value;
+    const status = document.getElementById('cloud-status');
+    for (const file of files) {
+      status.textContent = 'Uploading ' + file.name + ' to ' + folder + '/';
+      try { await ApiService.uploadFile(file, folder); }
+      catch (error) { status.textContent = error.message || 'Upload failed for ' + file.name; event.target.value = ''; return; }
+    }
+    event.target.value = '';
+    await loadCloudFiles();
+  }
+
+  /* MUSIC */
+  function renderGenres() {
+    document.getElementById('genre-chips').innerHTML = DB.music.genres.map(g => `<span class="genre-chip" onclick="filterGenre('${g}')">${g}</span>`).join('') + '<span class="genre-chip active" onclick="filterGenre(\'\')">All</span>';
+  }
+  async function uploadToGcs(file, folder) {
+    if (!file) return null;
+    const response = await ApiService.uploadFile(file, folder);
+    if (!response || response.success !== true || !response.url) throw new Error(response && response.error ? response.error : 'Cloud upload failed.');
+    return new URL(response.url, API_BASE_URL.replace(/\/api$/, '')).toString();
+  }
+  let genreFilter = '';
+  function filterGenre(g) { genreFilter = g; renderGenres(); renderMusic(); }
+  function addGenre() { const g = document.getElementById('new-genre').value.trim(); if (!g) return; if (!DB.music.genres.includes(g)) DB.music.genres.push(g); saveDB(); document.getElementById('new-genre').value = ''; renderGenres(); renderMusic(); }
+
+  function renderMusic() {
+    const tracks = DB.music.tracks.filter(t => !genreFilter || t.genre === genreFilter);
+    document.getElementById('tracks-table').innerHTML = tracks.map(t => `<tr><td><button class="play-btn" onclick="playMedia('${t.id}')">▶</button></td><td>${t.cover ? `<img class="thumb" src="${t.cover}">` : '<div class="thumb"></div>'}</td><td><strong>${t.title}</strong></td><td>${t.genre}</td><td>${t.bpm || '—'} / ${t.key || '—'}</td><td>${fmtZAR(t.lease)}</td><td>${fmtZAR(t.royaltyFree || 0)}</td><td>${fmtZAR(t.exclusive)}</td><td><button class="btn btn-secondary" onclick="editTrack('${t.id}')">Edit</button> <button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('music.tracks','${t.id}');renderMusic();}">✕</button></td></tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">No tracks yet.</td></tr>';
+    document.getElementById('packs-list').innerHTML = DB.music.packs.filter(p => !genreFilter || p.genre === genreFilter).map(p => `<div class="row-item"><div class="left"><button class="play-btn" onclick="playMedia('${p.id}')">▶</button>${p.cover ? `<img class="thumb" src="${p.cover}">` : '<div class="thumb"></div>'}<div><strong>${p.title}</strong><br><small style="color:var(--text-muted);">${(p.sampleList || []).length} samples · ${fmtZAR(p.lease)} / ${fmtZAR(p.exclusive)}</small><div style="margin-top:4px;">${(p.sampleList || []).map(s => `<span class="pk-sample-chip">🎵 ${s.name || s}</span>`).join('')}</div></div></div><div style="display:flex;gap:6px;"><button class="btn btn-secondary" onclick="editPack('${p.id}')">Edit</button><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('music.packs','${p.id}');renderMusic();}">✕</button></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">No packs yet.</p>';
+    document.getElementById('samples-list').innerHTML = DB.music.samples.filter(s => !genreFilter || s.genre === genreFilter).map(s => `<div class="row-item"><div class="left"><button class="play-btn" onclick="playMedia('${s.id}')">▶</button>${s.cover ? `<img class="thumb" src="${s.cover}">` : '<div class="thumb"></div>'}<div><strong>${s.title}</strong><br><small style="color:var(--text-muted);">${s.category} · ${s.genre} · ${fmtZAR(s.price)}</small></div></div><div style="display:flex;gap:6px;"><button class="btn btn-secondary" onclick="editSample('${s.id}')">Edit</button><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('music.samples','${s.id}');renderMusic();}">✕</button></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">No samples yet.</p>';
+  }
+
+  function openTrackModal() { document.getElementById('tk-title').value = ''; document.getElementById('tk-genre').innerHTML = DB.music.genres.map(g => `<option>${g}</option>`).join(''); document.getElementById('track-modal').classList.add('active'); }
+  async function saveTrack() { const t = document.getElementById('tk-title').value.trim(); if (!t) { alert('Title required'); return; } const rec = { id: nextId('TRK', 'music.tracks'), title: t, genre: document.getElementById('tk-genre').value, bpm: parseInt(document.getElementById('tk-bpm').value) || 0, key: document.getElementById('tk-key').value || '--', lease: parseFloat(document.getElementById('tk-lease').value) || 0, royaltyFree: parseFloat(document.getElementById('tk-rf').value) || 0, exclusive: parseFloat(document.getElementById('tk-excl').value) || 0, cover: null, audioUrl: null, dataUrl: null }; const f = document.getElementById('tk-file').files[0]; const c = document.getElementById('tk-cover').files[0]; try { if (f) { rec.audioUrl = await uploadToGcs(f, 'musicce'); rec.dataUrl = rec.audioUrl; } if (c) rec.cover = await uploadToGcs(c, 'designsce'); DB.music.tracks.push(rec); saveDB(); closeM('track-modal'); renderMusic(); } catch (error) { alert(error.message || 'Unable to upload track media.'); } }
+  function editTrack(id) { const t = DB.music.tracks.find(x => x.id === id); if (!t) return; openTrackModal(); document.getElementById('tk-title').value = t.title; document.getElementById('tk-genre').value = t.genre; document.getElementById('tk-bpm').value = t.bpm; document.getElementById('tk-key').value = t.key; document.getElementById('tk-lease').value = t.lease; document.getElementById('tk-rf').value = t.royaltyFree; document.getElementById('tk-excl').value = t.exclusive; document.getElementById('track-modal').dataset.edit = id; }
+
+  let packSamplesTemp = [];
+  function openPackModal() { packSamplesTemp = []; document.getElementById('pk-title').value = ''; document.getElementById('pk-genre').innerHTML = DB.music.genres.map(g => `<option>${g}</option>`).join(''); renderPackSamples(); document.getElementById('pack-modal').classList.add('active'); }
+  function addPackSample() { const n = document.getElementById('pk-new-sample').value.trim(); if (!n) return; packSamplesTemp.push({ name: n }); document.getElementById('pk-new-sample').value = ''; renderPackSamples(); }
+  function renderPackSamples() { document.getElementById('pk-samples-list').innerHTML = packSamplesTemp.map((s, i) => `<span class="pk-sample-chip">🎵 ${s.name} <button style="background:none;border:none;color:var(--danger);cursor:pointer;" onclick="packSamplesTemp.splice(${i},1);renderPackSamples()">✕</button></span>`).join('') || '<small style="color:var(--text-muted);">No samples yet.</small>'; }
+  async function savePack() { const t = document.getElementById('pk-title').value.trim(); if (!t) { alert('Title required'); return; } const rec = { id: nextId('PCK', 'music.packs'), title: t, genre: document.getElementById('pk-genre').value, lease: parseFloat(document.getElementById('pk-lease').value) || 0, exclusive: parseFloat(document.getElementById('pk-excl').value) || 0, sampleList: packSamplesTemp, cover: null, audioUrl: null, dataUrl: null }; const c = document.getElementById('pk-cover').files[0]; const a = document.getElementById('pk-audio').files[0]; try { if (c) rec.cover = await uploadToGcs(c, 'designsce'); if (a) { rec.audioUrl = await uploadToGcs(a, 'samplepacksce'); rec.dataUrl = rec.audioUrl; } DB.music.packs.push(rec); saveDB(); closeM('pack-modal'); renderMusic(); } catch (error) { alert(error.message || 'Unable to upload pack media.'); } }
+  function editPack(id) { const p = DB.music.packs.find(x => x.id === id); if (!p) return; openPackModal(); packSamplesTemp = JSON.parse(JSON.stringify(p.sampleList || [])); renderPackSamples(); document.getElementById('pk-title').value = p.title; document.getElementById('pk-genre').value = p.genre; document.getElementById('pk-lease').value = p.lease; document.getElementById('pk-excl').value = p.exclusive; document.getElementById('pack-modal').dataset.edit = id; }
+
+  function openSampleModal() { document.getElementById('sm-title').value = ''; document.getElementById('sm-genre').innerHTML = DB.music.genres.map(g => `<option>${g}</option>`).join(''); document.getElementById('sample-modal').classList.add('active'); }
+  async function saveSample() { const t = document.getElementById('sm-title').value.trim(); if (!t) { alert('Title required'); return; } const rec = { id: nextId('SMP', 'music.samples'), title: t, category: document.getElementById('sm-cat').value, genre: document.getElementById('sm-genre').value, bpm: parseInt(document.getElementById('sm-bpm').value) || 0, price: parseFloat(document.getElementById('sm-price').value) || 0, cover: null, audioUrl: null, dataUrl: null }; const c = document.getElementById('sm-cover').files[0]; const f = document.getElementById('sm-file').files[0]; try { if (c) rec.cover = await uploadToGcs(c, 'designsce'); if (f) { rec.audioUrl = await uploadToGcs(f, 'samplesce'); rec.dataUrl = rec.audioUrl; } DB.music.samples.push(rec); saveDB(); closeM('sample-modal'); renderMusic(); } catch (error) { alert(error.message || 'Unable to upload sample media.'); } }
+  function editSample(id) { const s = DB.music.samples.find(x => x.id === id); if (!s) return; openSampleModal(); document.getElementById('sm-title').value = s.title; document.getElementById('sm-cat').value = s.category; document.getElementById('sm-genre').value = s.genre; document.getElementById('sm-bpm').value = s.bpm; document.getElementById('sm-price').value = s.price; document.getElementById('sample-modal').dataset.edit = id; }
+
+  /* SERIES */
+  function openSeriesModal(kind) { document.getElementById('series-modal-title').textContent = kind === 'friday' ? 'Add Friday Item' : 'Add Monthly Item'; document.getElementById('series-modal').dataset.kind = kind; document.getElementById('sr-month-wrap').style.display = kind === 'monthly' ? '' : 'none'; document.getElementById('sr-date-wrap').style.display = kind === 'friday' ? '' : 'none'; document.getElementById('sr-cat').innerHTML = DB.music.genres.map(g => `<option>${g}</option>`).join(''); seriesTypeChange(); document.getElementById('series-modal').classList.add('active'); }
+  function seriesTypeChange() { const t = document.getElementById('sr-type').value; document.getElementById('sr-bpm-wrap').style.display = t === 'audio' ? '' : 'none'; document.getElementById('sr-audio-wrap').style.display = t === 'audio' ? '' : 'none'; document.getElementById('sr-disc-wrap').style.display = t === 'audio' ? 'none' : ''; document.getElementById('sr-slots-wrap').style.display = t === 'audio' ? 'none' : ''; }
+  async function saveSeries() { const t = document.getElementById('sr-title').value.trim(); if (!t) { alert('Title required'); return; } const kind = document.getElementById('series-modal').dataset.kind; const rec = { id: nextId(kind === 'friday' ? 'DRP' : 'MOF', kind === 'friday' ? 'fridayDrops' : 'monthlyOffers'), title: t, type: document.getElementById('sr-type').value, genre: document.getElementById('sr-cat').value, month: document.getElementById('sr-month').value, date: document.getElementById('sr-date').value, expiry: document.getElementById('sr-expiry').value, bpm: parseInt(document.getElementById('sr-bpm').value) || 0, discount: parseFloat(document.getElementById('sr-disc').value) || 0, slots: parseInt(document.getElementById('sr-slots').value) || 0, claimed: 0, cover: null, audioUrl: null, dataUrl: null, status: 'live' }; const folder = kind === 'friday' ? 'fridaymadnessce' : 'monthlymadnessce'; const c = document.getElementById('sr-cover').files[0]; const a = document.getElementById('sr-audio').files[0]; try { if (c) rec.cover = await uploadToGcs(c, folder); if (a) { rec.audioUrl = await uploadToGcs(a, folder); rec.dataUrl = rec.audioUrl; } (kind === 'friday' ? DB.fridayDrops : DB.monthlyOffers).push(rec); saveDB(); closeM('series-modal'); renderSeries(); } catch (error) { alert(error.message || 'Unable to upload series media.'); } }
+  function renderSeries() {
+    document.getElementById('friday-table').innerHTML = DB.fridayDrops.map(d => `<tr><td><button class="play-btn" onclick="playMedia('${d.id}')">▶</button></td><td>${d.cover ? `<img class="thumb" src="${d.cover}">` : '<div class="thumb"></div>'}</td><td><strong>${d.title}</strong></td><td>${d.type}</td><td>${d.genre}</td><td>${fmtDate(d.date)}</td><td>${fmtDate(d.expiry)}</td><td><span class="badge badge-${d.status === 'live' ? 'success' : 'neutral'}">${d.status}</span></td><td><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('fridayDrops','${d.id}');renderSeries();}">✕</button></td></tr>`).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">No Friday items.</td></tr>';
+    document.getElementById('monthly-list').innerHTML = DB.monthlyOffers.map(d => `<div class="row-item"><div class="left">${d.cover ? `<img class="thumb" src="${d.cover}">` : '<div class="thumb"></div>'}<div><strong>${d.title}</strong><br><small style="color:var(--text-muted);">${d.type} · ${d.genre} · ${d.month}</small></div></div><div style="display:flex;gap:6px;"><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('monthlyOffers','${d.id}');renderSeries();}">✕</button></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">No monthly items.</p>';
+  }
+
+  /* SOCIAL */
+  function renderSocial() {
+    const connected = (DB.connectedAccounts || []).filter(c => c.status === 'connected');
+    document.getElementById('sh-platforms').innerHTML = connected.map(c => `<label style="display:flex;gap:6px;align-items:center;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.85rem;"><input type="checkbox" value="${c.name}" checked style="accent-color:var(--primary);"> ${c.name}</label>`).join('') || '<small style="color:var(--text-muted);">No platforms connected — connect in Settings.</small>';
+    document.getElementById('sh-feed').innerHTML = DB.socialPosts.map(p => `<div class="post-card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">${p.platforms.map(pl => `<span class="badge badge-info">${pl}</span>`).join('')}<span style="font-size:.7rem;color:var(--text-muted);">${new Date(p.time).toLocaleString('en-ZA')}</span></div>${p.image ? `<img src="${p.image}" style="max-width:140px;border-radius:8px;margin-bottom:6px;">` : ''}<div style="font-size:.9rem;">${p.text}</div></div>`).join('') || '<p style="color:var(--text-muted);">No posts yet.</p>';
+  }
+  function publishPost() { const text = document.getElementById('sh-text').value.trim(); if (!text) { alert('Write a post first.'); return; } const plats = [...document.querySelectorAll('#sh-platforms input:checked')].map(i => i.value); if (!plats.length) { alert('Pick at least one platform.'); return; } const rec = { id: nextId('SPT', 'socialPosts'), text, platforms: plats, time: new Date().toISOString(), image: null }; const f = document.getElementById('sh-image').files[0]; const push = () => { DB.socialPosts.unshift(rec); saveDB(); document.getElementById('sh-text').value = ''; document.getElementById('sh-image').value = ''; renderSocial(); }; if (f) fileToDataUrl(f, d => { rec.image = d; push(); }); else push(); }
+
+  /* WORK */
+  function fillSubs() { document.getElementById('wk-sub').innerHTML = (SUBS[document.getElementById('wk-cat').value] || []).map(x => `<option>${x}</option>`).join(''); }
+  function openWorkModal() { document.getElementById('wk-title').value = ''; fillSubs(); document.getElementById('work-modal').classList.add('active'); }
+  async function saveWork() { const t = document.getElementById('wk-title').value.trim(); if (!t) { alert('Title required'); return; } const rec = { id: nextId('WRK', 'works'), title: t, category: document.getElementById('wk-cat').value, sub: document.getElementById('wk-sub').value, dataUrl: null, status: 'live' }; const f = document.getElementById('wk-image').files[0]; try { if (f) { const folder = rec.category === 'Videography' ? 'videosce' : rec.category === 'Web & App' ? 'applicationsce' : 'designsce'; rec.dataUrl = await uploadToGcs(f, folder); } DB.works.push(rec); saveDB(); closeM('work-modal'); renderWorks(); } catch (error) { alert(error.message || 'Unable to upload portfolio media.'); } }
+  function renderWorks() { const f = document.getElementById('work-filter').value; document.getElementById('works-grid').innerHTML = DB.works.filter(w => !f || w.category === f).map(w => `<div class="work-card ${w.status === 'hidden' ? 'hidden-work' : ''}">${w.dataUrl ? `<img src="${w.dataUrl}">` : '<div style="height:120px;background:var(--bg-elevated);"></div>'}<div class="info"><strong>${w.title}</strong><br><small style="color:var(--text-muted);">${w.category} → ${w.sub}</small><div style="margin-top:6px;display:flex;gap:4px;"><button class="btn btn-secondary" onclick="toggleWork('${w.id}')">${w.status === 'hidden' ? 'Show' : 'Hide'}</button><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('works','${w.id}');renderWorks();}">✕</button></div></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">No work uploaded.</p>'; }
+  function toggleWork(id) { const w = DB.works.find(x => x.id === id); if (!w) return; w.status = w.status === 'hidden' ? 'live' : 'hidden'; saveDB(); renderWorks(); }
+
+  /* NEWS */
+  function openNewsModal() { document.getElementById('nw-title').value = ''; document.getElementById('nw-body').value = ''; document.getElementById('news-modal').classList.add('active'); }
+  async function saveNews() { const t = document.getElementById('nw-title').value.trim(); if (!t) { alert('Title required'); return; } const rec = { id: nextId('NWS', 'website.news'), title: t, category: document.getElementById('nw-cat').value, imageSize: document.getElementById('nw-size').value, body: document.getElementById('nw-body').value, published: true, date: new Date().toISOString().slice(0, 10), dataUrl: null }; const f = document.getElementById('nw-image').files[0]; try { if (f) rec.dataUrl = await uploadToGcs(f, 'websitesce'); DB.website.news.unshift(rec); saveDB(); closeM('news-modal'); renderNews(); } catch (error) { alert(error.message || 'Unable to upload news image.'); } }
+  function renderNews() { document.getElementById('news-list').innerHTML = DB.website.news.map(n => `<div class="row-item"><div class="left">${n.dataUrl ? `<img class="thumb" src="${n.dataUrl}">` : '<div class="thumb"></div>'}<div><strong>${n.title}</strong><br><small style="color:var(--text-muted);">${n.category} · ${fmtDate(n.date)}</small></div></div><div style="display:flex;gap:6px;"><button class="btn btn-secondary" onclick="toggleNews('${n.id}')">${n.published ? 'Hide' : 'Show'}</button><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('website.news','${n.id}');renderNews();}">✕</button></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">No articles.</p>'; }
+  function toggleNews(id) { const n = DB.website.news.find(x => x.id === id); if (!n) return; n.published = !n.published; saveDB(); renderNews(); }
+
+  /* SLIDES */
+  function openSlideModal() { document.getElementById('sl-title').value = ''; document.getElementById('slide-modal').classList.add('active'); }
+  async function saveSlide() { const t = document.getElementById('sl-title').value.trim(); if (!t) { alert('Title required'); return; } const rec = { id: nextId('SLD', 'website.slides'), title: t, desktop: null, tablet: null, phone: null, active: true }; const d = document.getElementById('sl-desktop').files[0]; const tb = document.getElementById('sl-tablet').files[0]; const p = document.getElementById('sl-phone').files[0]; try { if (d) rec.desktop = await uploadToGcs(d, 'websitesce'); if (tb) rec.tablet = await uploadToGcs(tb, 'websitesce'); if (p) rec.phone = await uploadToGcs(p, 'websitesce'); DB.website.slides.push(rec); saveDB(); closeM('slide-modal'); renderSlides(); } catch (error) { alert(error.message || 'Unable to upload slide images.'); } }
+  function renderSlides() { document.getElementById('slides-list').innerHTML = DB.website.slides.map(s => `<div class="row-item"><div class="left"><div><strong>${s.title}</strong> <span class="badge badge-${s.active ? 'success' : 'neutral'}">${s.active ? 'Active' : 'Hidden'}</span><div class="slide-thumbs">${s.desktop ? `<img class="slide-thumb" src="${s.desktop}">` : ''}${s.tablet ? `<img class="slide-thumb" src="${s.tablet}">` : ''}${s.phone ? `<img class="slide-thumb" src="${s.phone}">` : ''}</div></div></div><div style="display:flex;gap:6px;"><button class="btn btn-secondary" onclick="toggleSlide('${s.id}')">${s.active ? 'Hide' : 'Show'}</button><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('website.slides','${s.id}');renderSlides();}">✕</button></div></div>`).join('') || '<p style="color:var(--text-muted);padding:12px;">No slides.</p>'; }
+  function toggleSlide(id) { const s = DB.website.slides.find(x => x.id === id); if (!s) return; s.active = !s.active; saveDB(); renderSlides(); }
+
+  /* PRICES */
+  function togglePrCustom() { document.getElementById('pr-custom-wrap').style.display = document.getElementById('pr-service-sel').value === 'custom' ? 'block' : 'none'; }
+  function openPriceModal() { document.getElementById('pr-service-sel').innerHTML = '<option value="">-- Select --</option>' + DB.services.map(s => `<option value="${s.name}">${s.name}</option>`).join('') + '<option value="custom">✏️ Custom...</option>'; document.getElementById('pr-price').value = ''; document.getElementById('price-modal').classList.add('active'); }
+  function savePrice() { const sel = document.getElementById('pr-service-sel').value; const service = sel === 'custom' ? document.getElementById('pr-custom').value.trim() : sel; const price = parseFloat(document.getElementById('pr-price').value); if (!service || isNaN(price)) { alert('Service and price required'); return; } DB.website.priceList.push({ id: nextId('PRC', 'website.priceList'), service, price, type: document.getElementById('pr-type').value }); saveDB(); closeM('price-modal'); renderPrices(); }
+  function renderPrices() { document.getElementById('price-table').innerHTML = DB.website.priceList.map(p => `<tr><td><strong>${p.service}</strong></td><td>${fmtZAR(p.price)}</td><td><span class="badge badge-info">${p.type}</span></td><td><button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('website.priceList','${p.id}');renderPrices();}">✕</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No prices.</td></tr>'; }
+
+  /* ACCOUNTS */
+  function renderAccounts() { const q = (document.getElementById('acc-search').value || '').toLowerCase(); document.getElementById('accounts-table').innerHTML = DB.portalAccounts.filter(a => !q || a.name.toLowerCase().includes(q) || (a.email || '').toLowerCase().includes(q) || (a.phone || '').includes(q)).map(a => `<tr><td><strong>${a.name}</strong></td><td>${a.email}</td><td>${a.phone || '—'}</td><td>${a.country}</td><td><span class="badge badge-${a.status === 'active' ? 'success' : 'danger'}">${a.status}</span></td><td>${a.status === 'active' ? `<button class="btn btn-secondary" onclick="blockAccount('${a.id}');renderAccounts();">Block</button>` : `<button class="btn btn-success" onclick="unblockAccount('${a.id}');renderAccounts();">Unblock</button>`} <button class="btn btn-danger" onclick="if(confirm('To Bin?')){softDelete('portalAccounts','${a.id}');renderAccounts();}">✕</button></td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px;">No accounts.</td></tr>'; }
+
+  renderGenres(); renderMusic(); renderSeries(); renderSocial(); renderWorks(); renderNews(); renderSlides(); renderPrices(); renderAccounts();
+  feather.replace();
+</script>
+</body>
+</html>
