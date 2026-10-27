@@ -104,12 +104,20 @@ window.handleLogin = async function(e) {
 
     try {
     if (!loginChallengeId) {
-      button.textContent = 'Sending code...';
+      button.textContent = 'Signing in...';
       const response = await window.ApiService.login(
         document.getElementById('login-email').value,
         document.getElementById('login-password').value,
         document.getElementById('login-otp-channel').value
       );
+
+      // If the API returns a token directly (no OTP needed), log in immediately
+      if (response && response.success && response.data && response.data.token) {
+          window.location.replace('index.html');
+          return;
+      }
+
+      // If the API demands OTP, show the OTP screen
       if (!response || !response.success || !response.data || !response.data.challengeId) {
         throw new Error(response && response.message ? response.message : 'Unable to start verification.');
       }
