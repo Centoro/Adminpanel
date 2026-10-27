@@ -3,11 +3,7 @@
  * Complete version with all API methods
  */
 
-const API_BASE_URL = window.location.protocol === 'https:'
-    ? `${window.location.origin}/api`
-    : (window.location.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(window.location.hostname)
-        ? `${window.location.origin}/api`
-        : 'http://localhost:8080/api');
+const API_BASE_URL = 'https://api-28ym.onrender.com/api';
 
 class CentoroApiService {
     constructor() {
