@@ -70,13 +70,6 @@
         <label>Password</label>
         <input type="password" id="login-password" placeholder="••••••••" required>
       </div>
-      <div class="form-group">
-        <label for="login-otp-channel">Verification method</label>
-        <select id="login-otp-channel">
-          <option value="email">Email</option>
-          <option value="sms">SMS</option>
-        </select>
-      </div>
       </div>
       <div id="login-otp-step" class="form-group" style="display:none;">
         <label for="login-otp-code">Verification code</label>
@@ -108,16 +101,14 @@ window.handleLogin = async function(e) {
       const response = await window.ApiService.login(
         document.getElementById('login-email').value,
         document.getElementById('login-password').value,
-        document.getElementById('login-otp-channel').value
+        'email'
       );
 
-      // If the API returns a token directly (no OTP needed), log in immediately
       if (response && response.success && response.data && response.data.token) {
           window.location.replace('index.html');
           return;
       }
 
-      // If the API demands OTP, show the OTP screen
       if (!response || !response.success || !response.data || !response.data.challengeId) {
         throw new Error(response && response.message ? response.message : 'Unable to start verification.');
       }
