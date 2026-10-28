@@ -69,13 +69,16 @@ class CentoroApiService {
         }
         try {
             const response = await fetch(url, config);
-            if (response.status === 401) {
+            
+            // ✅ FIX: Do NOT show "Session expired" if the user is actively trying to log in
+            if (response.status === 401 && endpoint !== '/auth/login') {
                 this.clearToken();
                 if (!window.location.pathname.includes('login.html')) {
                     window.location.replace('login.html');
                 }
                 throw new Error('Session expired. Please login again.');
             }
+            
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
                 const json = await response.json();
