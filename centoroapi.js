@@ -315,11 +315,12 @@ class CentoroApiService {
     }
 
     // ============ AUTH ============
-    async login(username, password, channel = 'email') {
+    async login(identifier, password, channel = 'email') {
         try {
+            // Sends the input as BOTH username and email so the backend can handle either
             const response = await this.request('POST', '/auth/login', { 
-                username: username, 
-                email: username, 
+                username: identifier, 
+                email: identifier, 
                 password: password, 
                 channel: channel 
             });
