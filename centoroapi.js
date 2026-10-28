@@ -317,7 +317,12 @@ class CentoroApiService {
     // ============ AUTH ============
     async login(username, password, channel = 'email') {
         try {
-            const response = await this.request('POST', '/auth/login', { username, password, channel });
+            const response = await this.request('POST', '/auth/login', { 
+                username: username, 
+                email: username, 
+                password: password, 
+                channel: channel 
+            });
             if (response.success && response.data && response.data.challengeId) return response;
             if (response.success && response.data && response.data.token && response.data.user) {
                 this.setToken(response.data.token);
@@ -516,126 +521,6 @@ class CentoroApiService {
     async createBankTransaction(data) { return this.request('POST', '/bank-transactions', data); }
     async reconcileTransaction(id) { return this.request('POST', `/bank-transactions/${id}/reconcile`); }
     async deleteBankTransaction(id) { return this.request('DELETE', `/bank-transactions/${id}`); }
-
-    // ============ INVENTORY ============
-    async getInventory() { return this.request('GET', '/inventory'); }
-    async getInventoryItem(id) { return this.request('GET', `/inventory/${id}`); }
-    async createInventoryItem(data) { return this.request('POST', '/inventory', data); }
-    async updateInventoryItem(id, data) { return this.request('PUT', `/inventory/${id}`, data); }
-    async deleteInventoryItem(id) { return this.request('DELETE', `/inventory/${id}`); }
-
-    // ============ ACCOUNTING ============
-    async getJournalEntries() { return this.request('GET', '/accounting/journal'); }
-    async getJournalEntry(id) { return this.request('GET', `/accounting/journal/${id}`); }
-    async createJournalEntry(data) { return this.request('POST', '/accounting/journal', data); }
-    async updateJournalEntry(id, data) { return this.request('PUT', `/accounting/journal/${id}`, data); }
-    async deleteJournalEntry(id) { return this.request('DELETE', `/accounting/journal/${id}`); }
-    async getTrialBalance() { return this.request('GET', '/accounting/journal/trial-balance'); }
-    async getChartAccounts() { return this.request('GET', '/accounting/chart'); }
-    async createChartAccount(data) { return this.request('POST', '/accounting/chart', data); }
-    async updateChartAccount(id, data) { return this.request('PUT', `/accounting/chart/${id}`, data); }
-    async deleteChartAccount(id) { return this.request('DELETE', `/accounting/chart/${id}`); }
-
-    // ============ MUSIC ============
-    async getTracks() { return this.request('GET', '/music/tracks'); }
-    async getTrack(id) { return this.request('GET', `/music/tracks/${id}`); }
-    async createTrack(data) { return this.request('POST', '/music/tracks', data); }
-    async updateTrack(id, data) { return this.request('PUT', `/music/tracks/${id}`, data); }
-    async deleteTrack(id) { return this.request('DELETE', `/music/tracks/${id}`); }
-    async getPacks() { return this.request('GET', '/music/packs'); }
-    async createPack(data) { return this.request('POST', '/music/packs', data); }
-    async updatePack(id, data) { return this.request('PUT', `/music/packs/${id}`, data); }
-    async deletePack(id) { return this.request('DELETE', `/music/packs/${id}`); }
-    async getSamples() { return this.request('GET', '/music/samples'); }
-    async createSample(data) { return this.request('POST', '/music/samples', data); }
-    async updateSample(id, data) { return this.request('PUT', `/music/samples/${id}`, data); }
-    async deleteSample(id) { return this.request('DELETE', `/music/samples/${id}`); }
-
-    // ============ FRIDAY DROPS ============
-    async getFridayDrops() { return this.request('GET', '/friday-drops'); }
-    async getActiveFridayDrops() { return this.request('GET', '/friday-drops/active'); }
-    async getFridayDrop(id) { return this.request('GET', `/friday-drops/${id}`); }
-    async createFridayDrop(data) { return this.request('POST', '/friday-drops', data); }
-    async updateFridayDrop(id, data) { return this.request('PUT', `/friday-drops/${id}`, data); }
-    async deleteFridayDrop(id) { return this.request('DELETE', `/friday-drops/${id}`); }
-
-    // ============ MONTHLY OFFERS ============
-    async getMonthlyOffers() { return this.request('GET', '/monthly-offers'); }
-    async getActiveMonthlyOffers() { return this.request('GET', '/monthly-offers/active'); }
-    async getMonthlyOffer(id) { return this.request('GET', `/monthly-offers/${id}`); }
-    async createMonthlyOffer(data) { return this.request('POST', '/monthly-offers', data); }
-    async updateMonthlyOffer(id, data) { return this.request('PUT', `/monthly-offers/${id}`, data); }
-    async deleteMonthlyOffer(id) { return this.request('DELETE', `/monthly-offers/${id}`); }
-
-    // ============ BIN ============
-    async getBinItems() { return this.request('GET', '/bin'); }
-    async getBinItem(id) { return this.request('GET', `/bin/${id}`); }
-    async restoreBinItem(id) { return this.request('POST', `/bin/${id}/restore`); }
-    async permanentDeleteBinItem(id) { return this.request('DELETE', `/bin/${id}/permanent`); }
-    async emptyBin() { return this.request('DELETE', '/bin/empty'); }
-
-    // ============ REPORTS ============
-    async getMonthlyRevenue() { return this.request('GET', '/reports/monthly-revenue'); }
-    async getAccountingSummary() { return this.request('GET', '/reports/accounting-summary'); }
-    async getProjectProgress() { return this.request('GET', '/reports/project-progress'); }
-
-    // ============ EMAIL ============
-    async getEmailAccounts() { return this.request('GET', '/email/accounts'); }
-    async getEmailAccount(id) { return this.request('GET', `/email/accounts/${id}`); }
-    async connectEmailAccount(data) { return this.request('POST', '/email/accounts', data); }
-    async disconnectEmailAccount(id) { return this.request('DELETE', `/email/accounts/${id}`); }
-    async getEmailCampaigns() { return this.request('GET', '/email/campaigns'); }
-    async sendEmail(data) { return this.request('POST', '/email/send', data); }
-
-    // ============ PHONE ============
-    async getPhoneLines() { return this.request('GET', '/phone/lines'); }
-    async getPhoneLine(id) { return this.request('GET', `/phone/lines/${id}`); }
-    async createPhoneLine(data) { return this.request('POST', '/phone/lines', data); }
-    async deletePhoneLine(id) { return this.request('DELETE', `/phone/lines/${id}`); }
-    async getPhoneContacts() { return this.request('GET', '/phone/contacts'); }
-    async createPhoneContact(data) { return this.request('POST', '/phone/contacts', data); }
-    async updatePhoneContact(id, data) { return this.request('PUT', `/phone/contacts/${id}`, data); }
-    async deletePhoneContact(id) { return this.request('DELETE', `/phone/contacts/${id}`); }
-    async sendSmsCampaign(data) { return this.request('POST', '/phone/campaigns', data); }
-    async getSmsProviders() { return this.request('GET', '/phone/providers'); }
-    async createSmsProvider(data) { return this.request('POST', '/phone/providers', data); }
-    async deleteSmsProvider(id) { return this.request('DELETE', `/phone/providers/${id}`); }
-    async getSmsCampaigns() { return this.request('GET', '/phone/campaigns'); }
-
-    // ============ CONTRACTS ============
-    async getContracts() { return this.request('GET', '/contracts'); }
-    async getContract(id) { return this.request('GET', `/contracts/${id}`); }
-    async createContract(data) { return this.request('POST', '/contracts', data); }
-    async updateContract(id, data) { return this.request('PUT', `/contracts/${id}`, data); }
-    async deleteContract(id) { return this.request('DELETE', `/contracts/${id}`); }
-
-    // ============ ANALYTICS ============
-    async getAnalytics() { return this.request('GET', '/analytics'); }
-    async getTopCountries() { return this.request('GET', '/analytics/countries'); }
-    async createAnalytic(data) { return this.request('POST', '/analytics', data); }
-    async deleteAnalytic(id) { return this.request('DELETE', `/analytics/${id}`); }
-
-    // ============ PORTFOLIO ============
-    async getPortfolio() { return this.request('GET', '/portfolio'); }
-    async getPortfolioItem(id) { return this.request('GET', `/portfolio/${id}`); }
-    async createPortfolioItem(data) { return this.request('POST', '/portfolio', data); }
-    async updatePortfolioItem(id, data) { return this.request('PUT', `/portfolio/${id}`, data); }
-    async deletePortfolioItem(id) { return this.request('DELETE', `/portfolio/${id}`); }
-
-    // ============ CURRENCY ============
-    async getCurrencyRates() { return this.request('GET', '/currency/rates'); }
-    async getTimezones() { return this.request('GET', '/currency/timezones'); }
-    async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
-    async getCalendarNotesBetween(start, end) { return this.request('GET', `/calendar/notes/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`); }
-    async createCalendarNote(data) { return this.request('POST', '/calendar/notes', data); }
-    async updateCalendarNote(id, data) { return this.request('PUT', `/calendar/notes/${id}`, data); }
-    async deleteCalendarNote(id) { return this.request('DELETE', `/calendar/notes/${id}`); }
-
-    // ============ MARKET DATA ============
-    async getMarketData() { return this.request('GET', '/markets/data'); }
 }
 
-// Create global instance
-const ApiService = new CentoroApiService();
-window.ApiService = ApiService;
-window.CentoroApiService = CentoroApiService;
+window.ApiService = new CentoroApiService();
