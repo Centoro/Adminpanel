@@ -60,7 +60,11 @@ class CentoroApiService {
         const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json', ...options.headers };
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), options.timeout || 15000);
+        
+        // ✅ FIX: Give login requests 2 minutes (120000ms) to allow Render to wake up. Others get 15s.
+        const timeoutMs = endpoint === '/auth/login' ? 120000 : (options.timeout || 15000);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        
         const config = { method, headers, ...options, signal: controller.signal };
         delete config.timeout;
         if (data) {
