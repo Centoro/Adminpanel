@@ -61,8 +61,8 @@ class CentoroApiService {
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const controller = new AbortController();
         
-        // ✅ FIX: Give login requests 2 minutes (120000ms) to allow Render to wake up. Others get 15s.
-        const timeoutMs = endpoint === '/auth/login' ? 120000 : (options.timeout || 15000);
+        // ✅ FIX: Give login 120s, and all other requests 60s to allow Render to wake up from sleep
+        const timeoutMs = endpoint === '/auth/login' ? 120000 : (options.timeout || 60000);
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         
         const config = { method, headers, ...options, signal: controller.signal };
@@ -140,11 +140,15 @@ class CentoroApiService {
             smsCampaigns: () => this.getSmsCampaigns(),
             staffChats: () => this.getStaffChats(),
             bin: () => this.getBinItems(),
-            analytics: () => this.getAnalytics()
+            analytics: () => this.getAnalytics(),
+            // ✅ NEW: Dashboard support functions
+            currencyRates: () => this.getCurrencyRates(),
+            timezones: () => this.getTimezones(),
+            calendarNotes: () => this.getCalendarNotes()
         };
 
         const pageCollections = {
-            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers'],
+            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers', 'currencyRates', 'timezones', 'calendarNotes'],
             'projects.html': ['clients', 'projects', 'staff', 'jobCards'],
             'clients.html': ['clients', 'projects', 'invoices'],
             'staff.html': ['staff', 'projects'],
@@ -191,10 +195,26 @@ class CentoroApiService {
             else if (name === 'portfolio') target.works = (value || []).map(item => ({ ...item, id: String(item.id), sub: item.subcategory, dataUrl: item.imageUrl }));
             else if (name === 'staffChats') target.staffChats = value || [];
             else if (name === 'phoneContacts') target.phoneBook = value || [];
+            else if (name === 'currencyRates') target.currencies = this.formatCurrencyRates(value);
+            else if (name === 'timezones') target.timezones = value;
+            else if (name === 'calendarNotes') target.calendarNotes = (value || []).map(note => ({ ...note, id: String(note.id), date: String(note.date).slice(0, 10) }));
             else target[name] = value || [];
         });
         this.snapshots.set(target, JSON.parse(JSON.stringify(target)));
         return { failures: 0, loaded: collections.length };
+    }
+
+    // Helper to format currency rates for the dashboard
+    formatCurrencyRates(response) {
+        if (!response || !response.data || !response.data.rates) return [];
+        const rates = response.data.rates;
+        return Object.keys(rates).map(code => ({
+            code,
+            name: code,
+            symbol: code,
+            ratePerZAR: Number(rates[code]) || 0,
+            base: code === response.data.base
+        }));
     }
 
     persistAdminData(target) {
@@ -324,7 +344,6 @@ class CentoroApiService {
     // ============ AUTH ============
     async login(identifier, password, channel = 'email') {
         try {
-            // Sends the input as BOTH username and email so the backend can handle either
             const response = await this.request('POST', '/auth/login', { 
                 username: identifier, 
                 email: identifier, 
@@ -362,13 +381,6 @@ class CentoroApiService {
 
     // ============ DASHBOARD ============
     async getDashboardStats() { return this.request('GET', '/dashboard/stats'); }
-
-    // ============ DASHBOARD SUPPORT ============
-    async getCurrencyRates() { return this.request('GET', '/currency/rates'); }
-    async getTimezones() { return this.request('GET', '/currency/timezones'); }
-    async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
-
-        // ============ DASHBOARD SUPPORT ============
     async getCurrencyRates() { return this.request('GET', '/currency/rates'); }
     async getTimezones() { return this.request('GET', '/currency/timezones'); }
     async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
