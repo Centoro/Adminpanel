@@ -435,7 +435,7 @@
       <div class="form-group">
         <label>Attach File</label>
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('image/*')">🖼️ PNG/Image</button>
+          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('image/*')">️ PNG/Image</button>
           <button type="button" class="btn btn-secondary" onclick="pickNoteFile('video/*')">🎬 Video</button>
           <button type="button" class="btn btn-secondary" onclick="pickNoteFile('audio/*')">🎵 Audio</button>
           <button type="button" class="btn btn-secondary" onclick="pickNoteFile('.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.ppt,.pptx')">📄 Document</button>
@@ -684,18 +684,24 @@
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     let html = '';
+    // Day headers
     ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
       html += `<div style="text-align:center; font-size:0.7rem; font-weight:600; color:var(--text-muted); padding:4px 0;">${d}</div>`;
     });
 
-    for(let i=0; i<firstDay; i++) html += `<div></div>`;
+    // Empty cells for days before the first day
+    for(let i=0; i<firstDay; i++) {
+      html += `<div></div>`;
+    }
 
     const today = new Date().toISOString().slice(0,10);
 
+    // Render each day
     for(let d=1; d<=daysInMonth; d++) {
       const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const isToday = dateStr === today;
 
+      // Find events for this day
       const projects = DB.projects.filter(p => p.dueDate === dateStr);
       const jobs = DB.jobCards.filter(j => j.dueDate === dateStr);
       const notes = DB.calendarNotes.filter(n => n.date === dateStr);
@@ -1025,7 +1031,7 @@
       folders: [
         { id: 'FLD-' + Date.now() + '-1', name: '📁 Branding & Design', attachments: [] },
         { id: 'FLD-' + Date.now() + '-2', name: '📁 Client Documents', attachments: [] },
-        { id: 'FLD-' + Date.now() + '-3', name: '📁 Deliverables', attachments: [] }
+        { id: 'FLD-' + Date.now() + '-3', name: ' Deliverables', attachments: [] }
       ]
     };
 
@@ -1347,7 +1353,7 @@
   }
 
   function renderNoteCc() {
-    document.getElementById('note-cc-badges').innerHTML = noteCcList.map(cid => `<span class="cal-cc-badge">${ccLabel(cid)} <button style="background:none;border:none;color:#3b82f6;cursor:pointer;padding:0 0 0 4px;" onclick="removeNoteCc('${cid}')">×</button></span>`).join('') || '<span style="color:var(--text-muted); font-size:.8rem;">No people/teams CC’d.</span>';
+    document.getElementById('note-cc-badges').innerHTML = noteCcList.map(cid => `<span class="cal-cc-badge">${ccLabel(cid)} <button style="background:none;border:none;color:#3b82f6;cursor:pointer;padding:0 0 0 4px;" onclick="removeNoteCc('${cid}')">×</button></span>`).join('') || '<span style="color:var(--text-muted); font-size:.8rem;">No people/teams CC'd.</span>';
   }
 
   function ccLabel(cid) {
@@ -1382,11 +1388,11 @@
     if (['png','jpg','jpeg','gif','webp'].includes(ext)) return '🖼️';
     if (['mp4','mov','avi','mkv','webm'].includes(ext)) return '🎬';
     if (['mp3','wav','ogg','m4a','flac'].includes(ext)) return '🎵';
-    if (['pdf'].includes(ext)) return '📕';
-    if (['doc','docx','txt','rtf'].includes(ext)) return '📄';
-    if (['xls','xlsx','csv'].includes(ext)) return '📊';
+    if (['pdf'].includes(ext)) return '';
+    if (['doc','docx','txt','rtf'].includes(ext)) return '';
+    if (['xls','xlsx','csv'].includes(ext)) return '';
     if (['ppt','pptx'].includes(ext)) return '📽️';
-    if (['zip','rar','7z','gz'].includes(ext)) return '📦';
+    if (['zip','rar','7z','gz'].includes(ext)) return '';
     return '📎';
   }
 
