@@ -368,6 +368,11 @@ class CentoroApiService {
     async getTimezones() { return this.request('GET', '/currency/timezones'); }
     async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
 
+        // ============ DASHBOARD SUPPORT ============
+    async getCurrencyRates() { return this.request('GET', '/currency/rates'); }
+    async getTimezones() { return this.request('GET', '/currency/timezones'); }
+    async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
+
     // ============ CLIENTS ============
     async getClients() { return this.request('GET', '/clients'); }
     async getClient(id) { return this.request('GET', `/clients/${id}`); }
