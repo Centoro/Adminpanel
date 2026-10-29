@@ -1464,7 +1464,8 @@
 
   function tzTime(zone) {
     try {
-      return new Date().toLocaleTimeString('en-ZA', { timeZone: zone, hour: '2-digit', minute: '2-digit' });
+      // ✅ FIX: Added 'second: 2-digit' so the clock actually ticks visibly
+      return new Date().toLocaleTimeString('en-ZA', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     } catch(e) {
       return '—';
     }
@@ -1707,6 +1708,28 @@
 
   applyDashboardLayout();
   enableDashboardDrag();
+
+  // ✅ NEW: Live Global Time Zone Ticker
+  function tickTimeZones() {
+    // Update dashboard widget timezones
+    const widgetZones = TIME_ZONES.slice(0, 3).map(z => `<strong>${z.city}</strong> ${tzTime(z.zone)}`).join(' &nbsp;|&nbsp; ');
+    const dashTzEl = document.getElementById('dash-timezones');
+    if (dashTzEl) dashTzEl.innerHTML = widgetZones;
+
+    // Update modal timezones
+    const tzModalTable = document.getElementById('tz-modal-table');
+    if (tzModalTable) {
+      tzModalTable.innerHTML = TIME_ZONES.map(z => `<tr>
+        <td><strong>${z.city}</strong></td>
+        <td>${z.zone}</td>
+        <td>${tzTime(z.zone)}</td>
+        <td>${tzDate(z.zone)}</td>
+      </tr>`).join('');
+    }
+  }
+
+  // Start ticking every second
+  setInterval(tickTimeZones, 1000);
 </script>
 <script>
 let dashboardSupportLoaded = false;
