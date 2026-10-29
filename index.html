@@ -3,1850 +3,225 @@
 <head>
 <meta charset="UTF-8">
 <title>Dashboard · Centoro Admin</title>
-<script>
-/* ===== THEME PRE-LOADER — Eliminates theme flash on page change ===== */
-(function() {
-  try {
-    var raw = localStorage.getItem('centoro_admin_db_v7');
-    if (!raw) return;
-    var db = JSON.parse(raw);
-    var t = (db.settings && db.settings.theme) || {};
-
-    function isLight(hex) {
-      try {
-        var c = String(hex).replace('#', '').trim();
-        if (c.length === 3) c = c.split('').map(function(x) { return x + x; }).join('');
-        var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
-        if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
-        return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
-      } catch (e) { return false; }
-    }
-
-    var root = document.documentElement;
-
-    if (t.primary) root.style.setProperty('--primary', t.primary);
-    if (t.primaryDark) root.style.setProperty('--primary-dark', t.primaryDark);
-    if (t.primaryLight) root.style.setProperty('--primary-light', t.primaryLight);
-    if (t.accent) root.style.setProperty('--accent', t.accent);
-    if (t.bgBase) root.style.setProperty('--bg-base', t.bgBase);
-    if (t.bgSurface) root.style.setProperty('--bg-surface', t.bgSurface);
-
-    if (t.bgBase && isLight(t.bgBase)) {
-      root.style.setProperty('--bg-elevated', t.bgElevated || '#f8fafc');
-      root.style.setProperty('--bg-input', t.bgInput || '#f8fafc');
-      root.style.setProperty('--border', t.border || '#e2e8f0');
-      root.style.setProperty('--text-primary', t.textPrimary || '#0f172a');
-      root.style.setProperty('--text-secondary', t.textSecondary || '#475569');
-      root.style.setProperty('--text-muted', t.textMuted || '#94a3b8');
-    } else {
-      root.style.removeProperty('--bg-elevated');
-      root.style.removeProperty('--bg-input');
-      root.style.removeProperty('--border');
-      root.style.removeProperty('--text-primary');
-      root.style.removeProperty('--text-secondary');
-      root.style.removeProperty('--text-muted');
-    }
-  } catch (e) {}
-})();
-</script>
 <link rel="stylesheet" href="index.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/feather-icons"></script>
 <style>
-  .bell-wrap { position: relative; }
-  .bell-panel { position: absolute; right: 0; top: 44px; width: 360px; max-height: 420px; overflow-y: auto; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.5); display: none; z-index: 300; }
-  .bell-panel.open { display: block; }
-  .bell-item { display: flex; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: .85rem; align-items: flex-start; cursor: pointer; }
-  .bell-item:hover { background: var(--bg-elevated); }
-  .bell-item .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
-  .year-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px; }
-  .year-row { margin-bottom: 12px; }
-  .alert-card { border-left: 4px solid var(--danger); }
-
-  .cal-msg { padding: 8px 10px; border-radius: 8px; background: var(--bg-elevated); margin-bottom: 8px; font-size: .85rem; }
-  .cal-msg .meta { font-size: .7rem; color: var(--text-muted); margin-top: 4px; }
-  .cal-note-box { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
-  .cal-cc-badge { background: rgba(59,130,246,.15); color: #3b82f6; border-radius: 10px; padding: 2px 8px; font-size: .68rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
-  .cal-cc-chip { cursor: pointer; border: 1px solid var(--border); user-select: none; }
-  .cal-cc-chip.selected { border-color: var(--primary); background: rgba(59,130,246,.25); }
-  .clickable-card:hover { border-color: var(--primary); }
-
-  .cal-team-members { margin-top:6px; margin-bottom:10px; padding:8px; border:1px dashed var(--border); border-radius:8px; background:var(--bg-input); }
-  .cal-people-label { display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); font-weight:700; margin:8px 0 6px; }
-
-  .dash-section, .dash-draggable { cursor: grab; }
-  .dash-section.dragging, .dash-draggable.dragging { opacity: .45; }
-  .dash-section button, .dash-section a, .dash-draggable button, .dash-draggable a { cursor: pointer; }
-  .dash-section input, .dash-section textarea, .dash-section select,
-  .dash-draggable input, .dash-draggable textarea, .dash-draggable select { cursor: text; }
+body { margin: 0; font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; }
+.app-layout { display: flex; min-height: 100vh; }
+.sidebar { width: 260px; background: #1e293b; padding: 20px; border-right: 1px solid #334155; }
+.sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 30px; font-size: 1.5rem; font-weight: 700; color: #f59e0b; }
+.main-content { flex: 1; padding: 20px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #334155; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+.stat-card { background: #1e293b; padding: 20px; border-radius: 10px; border-left: 4px solid #f59e0b; }
+.stat-label { font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px; }
+.stat-value { font-size: 2rem; font-weight: 700; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+.card { background: #1e293b; border-radius: 10px; padding: 20px; border: 1px solid #334155; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.card-title { font-size: 1.1rem; font-weight: 600; }
+.btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+.btn-primary { background: #f59e0b; color: #0f172a; }
+.btn-secondary { background: #334155; color: #e2e8f0; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
+.data-table th { color: #94a3b8; font-weight: 600; font-size: 0.85rem; }
 </style>
 </head>
 <body>
 <div class="app-layout">
   <aside class="sidebar">
-    <div class="sidebar-header"><div class="sidebar-brand"><span class="dot"></span><span class="name">Centoro</span><span class="suffix">.</span></div><button class="sidebar-collapse" id="collapse-btn"><i data-feather="chevron-left"></i></button></div>
-    <nav class="sidebar-nav" id="sidebar-nav"></nav>
-    <div class="sidebar-user" id="sidebar-user"></div>
+    <div class="sidebar-brand">Centoro.</div>
+    <nav>
+      <div style="margin-bottom: 20px;"><strong style="color: #94a3b8; font-size: 0.75rem; text-transform: uppercase;">MAIN</strong></div>
+      <a href="index.html" style="display: block; padding: 10px; color: #f59e0b; text-decoration: none; background: #334155; border-radius: 6px; margin-bottom: 5px;">Dashboard</a>
+      <a href="projects.html" style="display: block; padding: 10px; color: #e2e8f0; text-decoration: none; border-radius: 6px; margin-bottom: 5px;">Projects</a>
+      <a href="jobcards.html" style="display: block; padding: 10px; color: #e2e8f0; text-decoration: none; border-radius: 6px; margin-bottom: 5px;">Job Cards</a>
+      <a href="invoices.html" style="display: block; padding: 10px; color: #e2e8f0; text-decoration: none; border-radius: 6px; margin-bottom: 5px;">Invoices</a>
+      <a href="accounting.html" style="display: block; padding: 10px; color: #e2e8f0; text-decoration: none; border-radius: 6px; margin-bottom: 5px;">Accounting</a>
+    </nav>
   </aside>
   <main class="main-content">
     <header class="topbar">
-      <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Dashboard</h1></div>
-      <div class="topbar-right">
-        <div class="bell-wrap">
-          <button class="icon-btn" onclick="toggleBell()"><i data-feather="bell"></i><span class="badge" id="bell-count">0</span></button>
-          <div class="bell-panel" id="bell-panel"></div>
-        </div>
-        <button class="icon-btn" id="logout-btn"><i data-feather="log-out"></i></button>
-        <div class="user-avatar" id="topbar-avatar">CJ</div>
+      <h1>Dashboard</h1>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-primary">+ Project</button>
+        <button class="btn btn-secondary">+ Invoice</button>
+        <button class="btn btn-secondary">📊 Data</button>
       </div>
     </header>
-    <div class="page-content">
-      <div class="page-header"><div><h1>Dashboard</h1><p>Welcome back — here's everything happening across Centoro right now.</p></div>
-        <div style="display:flex;gap:8px;"><a class="btn btn-primary" href="projects.html">+ Project</a><a class="btn btn-secondary" href="invoices.html">+ Invoice</a><a class="btn btn-secondary" href="data.html">📊 Data</a></div>
+
+    <div class="stats-grid">
+      <div class="stat-card" style="border-left-color: #10b981;">
+        <div class="stat-label">REVENUE (RECEIVED)</div>
+        <div class="stat-value" id="k-rev">R 0</div>
       </div>
-
-      <div id="dashboard-sections">
-
-        <div id="stats-section" class="stats-grid dash-section" data-dash-inner="stats">
-          <div class="stat-card green dash-draggable" id="stat-revenue" style="cursor:pointer;" onclick="location.href='accounting.html'"><div class="stat-label">Revenue (received)</div><div class="stat-value" id="k-rev">R 0</div></div>
-          <div class="stat-card red dash-draggable" id="stat-outstanding" style="cursor:pointer;" onclick="location.href='invoices.html'"><div class="stat-label">Outstanding</div><div class="stat-value" id="k-out">R 0</div></div>
-          <div class="stat-card blue dash-draggable" id="stat-projects" style="cursor:pointer;" onclick="location.href='projects.html'"><div class="stat-label">Active Projects</div><div class="stat-value" id="k-proj">0</div></div>
-          <div class="stat-card dash-draggable" id="stat-complaints" style="cursor:pointer;" onclick="location.href='chats.html'"><div class="stat-label">Open Complaints</div><div class="stat-value" id="k-comp">0</div></div>
-        </div>
-
-        <div id="widgets-section" class="grid-2 dash-section" data-dash-inner="widgets" style="margin-bottom:24px;">
-          <div class="card clickable-card dash-draggable" id="widget-rates" style="margin:0; padding:16px; cursor:pointer;" onclick="openM('rates-modal')">
-            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:600; margin-bottom:8px;">Exchange Rates</div>
-            <div id="dash-currencies" style="font-size:0.95rem; color:var(--text-primary);">Loading...</div>
-            <div style="font-size:.7rem;color:var(--text-muted);margin-top:6px;">Click to view all rates</div>
-          </div>
-          <div class="card clickable-card dash-draggable" id="widget-timezones" style="margin:0; padding:16px; cursor:pointer;" onclick="openM('tz-modal')">
-            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-secondary); font-weight:600; margin-bottom:8px;">Global Time Zones</div>
-            <div id="dash-timezones" style="font-size:0.95rem; color:var(--text-primary);">Loading...</div>
-            <div style="font-size:.7rem;color:var(--text-muted);margin-top:6px;">Click to view all time zones</div>
-          </div>
-        </div>
-
-        <div id="year-section" class="year-card dash-section">
-          <div style="display:flex;justify-content:space-between;margin-bottom:12px;"><strong style="color:var(--text-primary);">Company Year Progress</strong><span style="color:var(--text-muted);font-size:.8rem;">2024 → 2026</span></div>
-          <div id="year-bars"></div>
-        </div>
-
-        <div id="caljobs-section" class="grid-2 dash-section" data-dash-inner="caljobs" style="margin-bottom:24px;">
-          <div class="card dash-draggable" id="calendar-card" style="margin:0;">
-            <div class="card-header">
-              <div class="card-title">Company Calendar</div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <button class="btn btn-secondary" style="padding:4px 8px;" onclick="changeMonth(-1)">&lt;</button>
-                <strong id="cal-month-label" style="min-width:120px; text-align:center; font-size:0.9rem;"></strong>
-                <button class="btn btn-secondary" style="padding:4px 8px;" onclick="changeMonth(1)">&gt;</button>
-              </div>
-            </div>
-            <div id="calendar-grid" style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px;"></div>
-            <div style="margin-top:12px; font-size:0.75rem; color:var(--text-muted); text-align:center;">Click any date to add projects, notes, job cards, or start conversations.</div>
-          </div>
-
-          <div class="card dash-draggable" id="jobs-card" style="margin:0;">
-            <div class="card-header">
-              <div class="card-title">Active Job Cards</div>
-              <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
-                <button class="btn btn-primary" style="font-size:0.8rem; padding:6px 12px;" onclick="openDashJobModal(false)">+ Job Card</button>
-                <a href="jobcards.html" class="btn btn-secondary" style="font-size:0.8rem; padding:6px 12px;">View All</a>
-              </div>
-            </div>
-            <div style="max-height:350px; overflow-y:auto;">
-              <table class="data-table" style="margin:0;">
-                <thead><tr><th>Job</th><th>Client</th><th>Assigned</th><th>Due</th><th>Status</th></tr></thead>
-                <tbody id="dash-jobs-table"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div id="alerts-section" class="grid-2 dash-section" data-dash-inner="alerts">
-          <div class="card alert-card dash-draggable" id="alerts-card">
-            <div class="card-header"><div class="card-title">Alerts & Notifications</div><button class="btn btn-secondary" onclick="toggleBell()">View all</button></div>
-            <div id="alert-list"></div>
-          </div>
-          <div class="card dash-draggable" id="activity-card">
-            <div class="card-header"><div class="card-title">Team Activity</div></div>
-            <div id="activity-list"></div>
-          </div>
-        </div>
-
-        <div id="invoices-section" class="card dash-section">
-          <div class="card-header"><div class="card-title">Recent Invoices</div><a href="invoices.html" class="btn btn-secondary">Open Invoices</a></div>
-          <div class="card" style="padding:0;margin:0;">
-            <table class="data-table">
-              <thead><tr><th>Tracking #</th><th>Client</th><th>Total</th><th>Paid</th><th>Status</th></tr></thead>
-              <tbody id="inv-table"></tbody>
-            </table>
-          </div>
-        </div>
-
+      <div class="stat-card" style="border-left-color: #ef4444;">
+        <div class="stat-label">OUTSTANDING</div>
+        <div class="stat-value" id="k-out">R 0</div>
       </div>
+      <div class="stat-card" style="border-left-color: #3b82f6;">
+        <div class="stat-label">ACTIVE PROJECTS</div>
+        <div class="stat-value" id="k-proj">0</div>
+      </div>
+      <div class="stat-card" style="border-left-color: #f59e0b;">
+        <div class="stat-label">OPEN COMPLAINTS</div>
+        <div class="stat-value" id="k-comp">0</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Exchange Rates</div>
+        </div>
+        <div id="dash-currencies">Loading...</div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Global Time Zones</div>
+        </div>
+        <div id="dash-timezones">Loading...</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 30px;">
+      <div class="card-header">
+        <div class="card-title">Company Year Progress</div>
+      </div>
+      <div id="year-bars">Loading...</div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Company Calendar</div>
+        </div>
+        <div id="calendar-grid" style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Active Job Cards</div>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Job</th><th>Client</th><th>Assigned</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody id="dash-jobs-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 30px;">
+      <div class="card-header">
+        <div class="card-title">Recent Invoices</div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Tracking #</th><th>Client</th><th>Total</th><th>Paid</th><th>Status</th></tr></thead>
+        <tbody id="inv-table"></tbody>
+      </table>
     </div>
   </main>
 </div>
 
-<!-- CALENDAR ACTION MODAL -->
-<div class="modal-overlay" id="cal-action-modal">
-  <div class="modal" style="max-width:460px;">
-    <div class="modal-header">
-      <div class="modal-title" id="cal-action-title">Date Actions</div>
-      <button class="modal-close" onclick="closeM('cal-action-modal')">✕</button>
-    </div>
-    <div class="modal-body" id="cal-action-body" style="min-height:100px;"></div>
-    <div class="modal-footer" style="flex-direction:column; gap:8px; align-items:stretch;">
-      <button class="btn btn-primary" onclick="openCalProjectModal()">+ Create Project</button>
-      <button class="btn btn-secondary" onclick="openDashJobModal(true)">Issue Job Card</button>
-      <button class="btn btn-secondary" onclick="openCalChatModal()">Start Team Conversation</button>
-      <button class="btn btn-secondary" onclick="openCalNoteModal()">Add Note / Info</button>
-    </div>
-  </div>
-</div>
-
-<!-- CREATE PROJECT FROM CALENDAR -->
-<div class="modal-overlay" id="cal-project-modal">
-  <div class="modal" style="max-width:760px;">
-    <div class="modal-header">
-      <div class="modal-title">Create Project</div>
-      <button class="modal-close" onclick="closeM('cal-project-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group"><label>Project Name</label><input id="cp-name" placeholder="e.g. Uncle Cal Video"></div>
-        <div class="form-group"><label>Client</label><select id="cp-client"></select></div>
-      </div>
-
-      <div class="form-group">
-        <label>New Client (if not listed)</label>
-        <div class="form-grid" style="margin-bottom:8px;">
-          <div class="form-group" style="margin:0;">
-            <label>First Name</label>
-            <input type="text" id="cp-new-client-name">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Surname</label>
-            <input type="text" id="cp-new-client-surname">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Initials</label>
-            <input type="text" id="cp-new-client-initials">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Contact</label>
-            <input type="text" id="cp-new-client-phone">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Email</label>
-            <input type="email" id="cp-new-client-email">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Address</label>
-            <input type="text" id="cp-new-client-address">
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary" onclick="quickAddProjectClient()">+ Add Client</button>
-      </div>
-
-      <div class="form-grid">
-        <div class="form-group"><label>Service</label><select id="cp-service" onchange="toggleCpCustom()"></select></div>
-        <div class="form-group" id="cp-custom-wrap" style="display:none;"><label>Custom Service</label><input id="cp-custom" placeholder="Custom service"></div>
-        <div class="form-group"><label>Budget (ZAR)</label><input type="number" id="cp-budget" placeholder="0.00"></div>
-        <div class="form-group"><label>Due Date</label><input type="date" id="cp-date"></div>
-        <div class="form-group"><label>Importance / Priority</label>
-          <select id="cp-priority">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Status</label>
-          <select id="cp-status">
-            <option value="planning" selected>Planning</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-group"><label>Team</label><div id="cp-team" style="display:flex;gap:8px;flex-wrap:wrap;"></div></div>
-      <div class="form-group"><label>Description</label><textarea id="cp-desc" rows="3" placeholder="Project details, deliverables, notes..."></textarea></div>
-
-      <div class="form-group" style="margin-top:10px;">
-        <label style="display:flex; gap:8px; align-items:center; cursor:pointer;">
-          <input type="checkbox" id="cp-create-job" checked style="accent-color:var(--primary);" onchange="toggleCpJobFields()">
-          Create first job card for this project
-        </label>
-      </div>
-
-      <div id="cp-job-fields">
-        <div class="form-grid">
-          <div class="form-group"><label>Job Card Title</label><input id="cp-job-title" value="Project Setup"></div>
-          <div class="form-group"><label>Job Type / Department</label><select id="cp-job-type" onchange="toggleCpJobTypeCustom()"></select></div>
-          <div class="form-group" id="cp-job-type-custom-wrap" style="display:none;"><label>Custom Job Type</label><input id="cp-job-type-custom"></div>
-          <div class="form-group"><label>Assigned To</label><select id="cp-job-assignee"></select></div>
-          <div class="form-group"><label>Estimated Hours</label><input type="number" id="cp-job-hours" min="0" step="0.5" value="1"></div>
-          <div class="form-group">
-            <label>Total People</label>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input type="number" id="cp-job-people" min="0" value="1" style="flex:1;">
-              <label style="display:flex;gap:6px;align-items:center;margin:0;cursor:pointer;white-space:nowrap;">
-                <input type="checkbox" id="cp-job-people-unlimited" onchange="toggleCpJobPeople()"> Unlimited
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeM('cal-project-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDashProject(false)">Save Project</button>
-      <button class="btn btn-secondary" onclick="saveDashProject(true)">Save & Open Projects</button>
-    </div>
-  </div>
-</div>
-
-<!-- ISSUE JOB CARD -->
-<div class="modal-overlay" id="cal-job-modal">
-  <div class="modal" style="max-width:760px;">
-    <div class="modal-header">
-      <div class="modal-title">Issue Job Card</div>
-      <button class="modal-close" onclick="closeM('cal-job-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group"><label>Job Title</label><input id="dj-title" placeholder="e.g. Walk-in client consultation"></div>
-        <div class="form-group"><label>Client</label><select id="dj-client" onchange="filterJobProjects()"></select></div>
-      </div>
-
-      <div class="form-group">
-        <label>New Client (if not listed)</label>
-        <div class="form-grid" style="margin-bottom:8px;">
-          <div class="form-group" style="margin:0;">
-            <label>First Name</label>
-            <input type="text" id="dj-new-client-name">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Surname</label>
-            <input type="text" id="dj-new-client-surname">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Initials</label>
-            <input type="text" id="dj-new-client-initials">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Contact</label>
-            <input type="text" id="dj-new-client-phone">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Email</label>
-            <input type="email" id="dj-new-client-email">
-          </div>
-          <div class="form-group" style="margin:0;">
-            <label>Address</label>
-            <input type="text" id="dj-new-client-address">
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary" onclick="quickAddJobClient()">+ Add Client</button>
-      </div>
-
-      <div class="form-grid">
-        <div class="form-group"><label>Job Type / Department</label><select id="dj-type" onchange="toggleDjTypeCustom()"></select></div>
-        <div class="form-group" id="dj-type-custom-wrap" style="display:none;"><label>Custom Job Type</label><input id="dj-type-custom"></div>
-        <div class="form-group"><label>Service</label><select id="dj-service" onchange="toggleDjCustom()"></select></div>
-        <div class="form-group" id="dj-custom-wrap" style="display:none;"><label>Custom Service</label><input id="dj-custom" placeholder="Custom service"></div>
-        <div class="form-group"><label>Related Project (optional)</label><select id="dj-project"></select></div>
-        <div class="form-group"><label>Assigned To</label><select id="dj-assignee"></select></div>
-        <div class="form-group"><label>Importance / Priority</label>
-          <select id="dj-priority">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Status</label>
-          <select id="dj-status">
-            <option value="pending" selected>Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Due Date</label><input type="date" id="dj-date"></div>
-        <div class="form-group"><label>Estimated Hours</label><input type="number" id="dj-hours" min="0" step="0.5" value="1"></div>
-        <div class="form-group">
-          <label>Total People</label>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input type="number" id="dj-people" min="0" value="1" style="flex:1;">
-            <label style="display:flex;gap:6px;align-items:center;margin:0;cursor:pointer;white-space:nowrap;">
-              <input type="checkbox" id="dj-people-unlimited" onchange="toggleDjPeople()"> Unlimited
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-group"><label>Description</label><textarea id="dj-desc" rows="2" placeholder="What does the client need?"></textarea></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeM('cal-job-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDashJob()">Issue Job Card</button>
-    </div>
-  </div>
-</div>
-
-<!-- ADD NOTE / INFO FROM CALENDAR -->
-<div class="modal-overlay" id="cal-note-modal">
-  <div class="modal" style="max-width:580px;">
-    <div class="modal-header">
-      <div class="modal-title">Add Note / Info — <span id="note-date-label"></span></div>
-      <button class="modal-close" onclick="closeM('cal-note-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label>Note</label>
-        <textarea id="note-text" rows="3" placeholder="Write information for this date..."></textarea>
-      </div>
-
-      <div class="form-grid">
-        <div class="form-group">
-          <label>Importance</label>
-          <select id="note-importance">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Add CC</label>
-          <select id="note-cc-select" onchange="addNoteCc(this)">
-            <option value="">+ Add person/team</option>
-            <optgroup label="Teams" id="note-cc-teams"></optgroup>
-            <optgroup label="Staff" id="note-cc-staff"></optgroup>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>CC'd</label>
-        <div id="note-cc-badges" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
-      </div>
-
-      <div class="form-group">
-        <label>Attach File</label>
-        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('image/*')">️ PNG/Image</button>
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('video/*')">🎬 Video</button>
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('audio/*')">🎵 Audio</button>
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.ppt,.pptx')">📄 Document</button>
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('.zip,.rar,.7z')">📦 Archive</button>
-          <button type="button" class="btn btn-secondary" onclick="pickNoteFile('*/*')">📎 Any File</button>
-        </div>
-        <input type="file" id="note-file" style="display:none;" onchange="noteFileChosen(this)">
-        <div id="note-file-label" style="font-size:.85rem; color:var(--text-secondary);">No file selected.</div>
-      </div>
-
-      <div class="form-group">
-        <label>Google Doc / Sheet Link (optional)</label>
-        <input id="note-glink" placeholder="https://docs.google.com/...">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeM('cal-note-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveCalNote()">Save Note</button>
-    </div>
-  </div>
-</div>
-
-<!-- INTERNAL TEAM CONVERSATION FROM CALENDAR -->
-<div class="modal-overlay" id="cal-chat-modal">
-  <div class="modal" style="max-width:680px;">
-    <div class="modal-header">
-      <div class="modal-title">Team Conversation (Internal) — <span id="chat-date-label"></span></div>
-      <button class="modal-close" onclick="closeM('cal-chat-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="color:var(--text-secondary); font-size:.85rem; margin-bottom:12px;">Internal team discussion. This is separate from Client Chats.</p>
-
-      <div class="form-group">
-        <label>Staff / Teams — click a team to view/select its people</label>
-        <div id="cal-chat-people" style="display:block;"></div>
-      </div>
-
-      <div id="cal-chat-thread" style="max-height:260px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:12px; background:var(--bg-input); margin-bottom:12px;"></div>
-
-      <div style="display:flex; gap:8px;">
-        <input id="cal-chat-input" placeholder="Write internal message..." style="flex:1; padding:10px; background:var(--bg-input); border:1px solid var(--border); border-radius:8px; color:var(--text-primary);" onkeydown="if(event.key==='Enter')sendInternalChat()">
-        <button class="btn btn-primary" onclick="sendInternalChat()">Send</button>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeM('cal-chat-modal')">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- EXCHANGE RATES MODAL -->
-<div class="modal-overlay" id="rates-modal">
-  <div class="modal" style="max-width:760px;">
-    <div class="modal-header">
-      <div class="modal-title">Exchange Rates</div>
-      <button class="modal-close" onclick="closeM('rates-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;">
-        <p style="color:var(--text-secondary); font-size:.85rem; margin:0;">Base currency: ZAR. Full rate management lives in Accounting → Currencies.</p>
-        <button class="btn btn-secondary" onclick="refreshCurrencyRates()">↻ Refresh</button>
-      </div>
-      <div class="card" style="padding:0; margin:0;">
-        <table class="data-table">
-          <thead><tr><th>Code</th><th>Name</th><th>Symbol</th><th>Rate per R1</th><th>1 Unit =</th></tr></thead>
-          <tbody id="rates-modal-table"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeM('rates-modal')">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- TIME ZONES MODAL -->
-<div class="modal-overlay" id="tz-modal">
-  <div class="modal" style="max-width:760px;">
-    <div class="modal-header">
-      <div class="modal-title">Global Time Zones</div>
-      <button class="modal-close" onclick="closeM('tz-modal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="card" style="padding:0; margin:0;">
-        <table class="data-table">
-          <thead><tr><th>City</th><th>Time Zone</th><th>Time</th><th>Date</th></tr></thead>
-          <tbody id="tz-modal-table"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeM('tz-modal')">Close</button>
-    </div>
-  </div>
-</div>
-
 <script src="centoroapi.js"></script>
-<script src="index.js"></script>
 <script>
-  initApp('index.html', 'Dashboard');
-
-  if (!DB.calendarNotes) DB.calendarNotes = [];
-  if (!DB.internalChats) DB.internalChats = [];
-  if (!DB.dashboardLayout) DB.dashboardLayout = { sections: [], inner: {} };
-  if (!DB.dashboardLayout.inner) DB.dashboardLayout.inner = {};
-  if (!DB.teams) DB.teams = [];
-  if (!DB.services) DB.services = [];
-
-  let TIME_ZONES = [
-    { city: 'Johannesburg', zone: 'Africa/Johannesburg' },
-    { city: 'London', zone: 'Europe/London' },
-    { city: 'New York', zone: 'America/New_York' },
-    { city: 'Los Angeles', zone: 'America/Los_Angeles' },
-    { city: 'Dubai', zone: 'Asia/Dubai' },
-    { city: 'Tokyo', zone: 'Asia/Tokyo' },
-    { city: 'Sydney', zone: 'Australia/Sydney' },
-    { city: 'Perth', zone: 'Australia/Perth' }
-  ];
-
-  const DASH_SERVICE_OPTIONS = [
-    'Graphic Design',
-    'Web & App Development',
-    'Videography & Photography',
-    'Music Production & Mixing',
-    'Studio Recording',
-    'Mixing & Mastering',
-    'Marketing & Promotions',
-    'Event Coverage',
-    'Beat Lease',
-    'Technical Support',
-    'Custom'
-  ];
-
-  const JOB_TYPES = [
-    'Walk-through',
-    'Service Delivery',
-    'Client Consultation',
-    'Complaint',
-    'Account Checking',
-    'Delivery',
-    'IT Department',
-    'Office Admin',
-    'Accounting',
-    'Customer Support',
-    'Creative / Design',
-    'Development',
-    'Management',
-    'Custom'
-  ];
-
-  const DEFAULT_TEAM_NAMES = [
-    'Creative Team',
-    'Dev Team',
-    'IT Department',
-    'Office Admin',
-    'Accounting',
-    'Management',
-    'Marketing',
-    'Operations',
-    'Customer Support'
-  ];
-
-  function ensureDashboardServices() {
-    if (!DB.services) DB.services = [];
-
-    const required = [
-      {
-        name: 'Studio Recording',
-        price: 350,
-        type: 'hourly',
-        category: 'Music'
-      },
-      {
-        name: 'Mixing & Mastering',
-        price: 800,
-        type: 'project',
-        category: 'Music'
-      }
-    ];
-
-    function norm(str) {
-      return String(str || '')
-        .toLowerCase()
-        .replace(/&/g, 'and')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    let changed = false;
-
-    required.forEach(req => {
-      const exists = DB.services.some(s => norm(s.name).includes(norm(req.name)));
-      if (!exists) {
-        DB.services.push({
-          id: nextId('SRV', 'services'),
-          name: req.name,
-          price: req.price,
-          type: req.type,
-          category: req.category
-        });
-        changed = true;
-      }
-    });
-
-    if (changed) saveDB();
-  }
-  ensureDashboardServices();
-
-  function ensureDefaultTeams() {
-    let changed = false;
-    DEFAULT_TEAM_NAMES.forEach(name => {
-      if (!DB.teams.some(t => t.name === name)) {
-        DB.teams.push({ id: nextId('TM', 'teams'), name, members: [] });
-        changed = true;
-      }
-    });
-    if (changed) saveDB();
-  }
-  ensureDefaultTeams();
-
-  let calDate = new Date();
-  let selectedCalDate = null;
-  let noteCcList = [];
-  let expandedTeamId = null;
-
-  function closeM(id) { document.getElementById(id).classList.remove('active'); }
-  function openM(id) { document.getElementById(id).classList.add('active'); }
-
-  function buildAlerts() {
-    const out = [];
-    getDueAlerts().forEach(a => out.push({ color: a.level === 'overdue' ? 'var(--danger)' : 'var(--warning)', text: `${a.level === 'overdue' ? 'OVERDUE' : 'Due soon'}: #${a.invoice.trackingNumber} — ${fmtZAR(a.invoice.total - a.invoice.paid)} (${Math.abs(a.days)}d)`, href: 'accounting.html' }));
-    DB.chats.filter(c => c.status === 'open').forEach(c => out.push({ color: 'var(--danger)', text: `Open complaint: ${c.subject} (${getClient(c.clientId) ? getClient(c.clientId).name : ''})`, href: 'chats.html' }));
-    const today = new Date().toISOString().slice(0, 10);
-    (DB.bookings || []).filter(b => !b.returnedDate && b.dueBack && b.dueBack < today).forEach(b => { const a = DB.assets.find(x => x.id === b.assetId); out.push({ color: 'var(--warning)', text: `Equipment overdue: ${a ? a.name : 'item'} not returned`, href: 'assets.html' }); });
-    DB.vouchers.filter(v => voucherStatus(v) === 'active' && v.expiryDate <= new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)).forEach(v => out.push({ color: 'var(--info, #3b82f6)', text: `Voucher ${v.code} expires ${fmtDate(v.expiryDate)}`, href: 'vouchers.html' }));
-    DB.budgets.forEach(b => { const spent = DB.expenses.filter(e => e.status === 'approved' && e.category === b.category).reduce((s, e) => s + e.amount, 0); if (spent / b.annual > 0.75) out.push({ color: 'var(--warning)', text: `Budget ${b.category}: ${Math.round(spent / b.annual * 100)}% used`, href: 'accounting.html' }); });
-    return out;
-  }
-
-  function renderCalendar() {
-    const year = calDate.getFullYear();
-    const month = calDate.getMonth();
-    document.getElementById('cal-month-label').textContent = calDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    let html = '';
-    // Day headers
-    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
-      html += `<div style="text-align:center; font-size:0.7rem; font-weight:600; color:var(--text-muted); padding:4px 0;">${d}</div>`;
-    });
-
-    // Empty cells for days before the first day
-    for(let i=0; i<firstDay; i++) {
-      html += `<div></div>`;
-    }
-
-    const today = new Date().toISOString().slice(0,10);
-
-    // Render each day
-    for(let d=1; d<=daysInMonth; d++) {
-      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const isToday = dateStr === today;
-
-      // Find events for this day
-      const projects = DB.projects.filter(p => p.dueDate === dateStr);
-      const jobs = DB.jobCards.filter(j => j.dueDate === dateStr);
-      const notes = DB.calendarNotes.filter(n => n.date === dateStr);
-      const hasEvents = projects.length > 0 || jobs.length > 0 || notes.length > 0;
-
-      const bg = isToday ? 'var(--primary)' : (hasEvents ? 'var(--bg-elevated)' : 'transparent');
-      const color = isToday ? '#0f172a' : 'var(--text-primary)';
-      const border = hasEvents && !isToday ? '1px solid var(--primary)' : '1px solid var(--border)';
-
-      html += `<div onclick="openCalDate('${dateStr}')" style="min-height:46px; background:${bg}; color:${color}; border:${border}; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:0.85rem; position:relative; padding:4px; transition:all 0.2s;">
-        <span style="font-weight:600;">${d}</span>
-        ${hasEvents ? '<div style="display:flex; gap:2px; margin-top:2px;"><span style="width:4px; height:4px; background:var(--primary); border-radius:50%;"></span></div>' : ''}
-      </div>`;
-    }
-
-    document.getElementById('calendar-grid').innerHTML = html;
-  }
-
-  function changeMonth(dir) {
-    calDate.setMonth(calDate.getMonth() + dir);
-    renderCalendar();
-  }
-
-  function peopleMeta(j) {
-    if (j.people === undefined || j.people === null) return '';
-    return j.people === 'unlimited' ? 'People: ∞' : `People: ${j.people}`;
-  }
-
-  function openCalDate(dateStr) {
-    selectedCalDate = dateStr;
-    document.getElementById('cal-action-title').textContent = new Date(dateStr).toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-    const projects = DB.projects.filter(p => p.dueDate === dateStr);
-    const jobs = DB.jobCards.filter(j => j.dueDate === dateStr);
-    const notes = DB.calendarNotes.filter(n => n.date === dateStr);
-    const chat = DB.internalChats.find(c => c.date === dateStr);
-
-    let body = '';
-
-    if(projects.length) {
-      body += '<div style="margin-bottom:12px;"><strong style="color:var(--text-secondary); font-size:0.75rem; text-transform:uppercase;">Projects Due</strong>';
-      projects.forEach(p => {
-        body += `<div style="padding:8px 0; border-bottom:1px solid var(--border); font-size:0.9rem;">📂 ${p.name} <span class="badge badge-${p.priority === 'high' ? 'danger' : p.priority === 'medium' ? 'warning' : 'info'}">${p.priority}</span></div>`;
-      });
-      body += '</div>';
-    }
-
-    if(jobs.length) {
-      body += '<div style="margin-bottom:12px;"><strong style="color:var(--text-secondary); font-size:0.75rem; text-transform:uppercase;">Job Cards Due</strong>';
-      jobs.forEach(j => {
-        const client = getClient(j.clientId);
-        const meta = [j.type, j.service, peopleMeta(j)].filter(Boolean).join(' · ');
-        body += `<div style="padding:8px 0; border-bottom:1px solid var(--border); font-size:0.9rem;">📋 ${j.title}${client ? ` — ${client.name}` : ''}${meta ? ` <small style="color:var(--text-muted);">(${meta})</small>` : ''}</div>`;
-      });
-      body += '</div>';
-    }
-
-    if(notes.length) {
-      body += '<div style="margin-bottom:12px;"><strong style="color:var(--text-secondary); font-size:0.75rem; text-transform:uppercase;">Notes & Files</strong>';
-      notes.forEach(n => {
-        const impBadge = { high:'danger', medium:'warning', low:'info' }[n.importance] || 'neutral';
-        let attachmentHtml = '';
-
-        if(n.attachment) {
-          if(n.attachment.googleUrl) {
-            attachmentHtml = `<div style="margin-top:6px;"><a href="${n.attachment.googleUrl}" target="_blank" style="color:var(--primary);">📄 ${n.attachment.name}</a></div>`;
-          } else {
-            const src = mediaSrc(n.attachment);
-            const ext = (n.attachment.fileType || '').toLowerCase();
-            const isImg = ['png','jpg','jpeg','gif','webp'].includes(ext);
-            if(isImg && src) {
-              attachmentHtml = `<img src="${src}" style="max-width:100%; border-radius:8px; margin-top:6px;">`;
-            } else {
-              attachmentHtml = `<div style="margin-top:6px; cursor:pointer;" onclick="openCalNoteAttachment('${n.id}')">${fileIcon(n.attachment.name, n.attachment.fileType)} ${n.attachment.name} <small style="color:var(--text-muted);">${n.attachment.fileType || ''}</small></div>`;
-            }
-          }
-        }
-
-        const ccHtml = (n.cc || []).map(cid => `<span class="cal-cc-badge">${ccLabel(cid)}</span>`).join('');
-
-        body += `<div class="cal-note-box">
-          <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
-            <span class="badge badge-${impBadge}">${n.importance || 'medium'}</span>
-            <button class="btn btn-danger" style="padding:2px 8px; font-size:.7rem;" onclick="deleteCalNote('${n.id}')">Remove</button>
-          </div>
-          ${n.text ? `<div style="margin-top:6px; font-size:.9rem;">${n.text}</div>` : ''}
-          ${attachmentHtml}
-          ${ccHtml ? `<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">${ccHtml}</div>` : ''}
-          <div style="font-size:.7rem; color:var(--text-muted); margin-top:6px;">${n.createdBy} · ${new Date(n.createdAt).toLocaleString('en-ZA')}</div>
-        </div>`;
-      });
-      body += '</div>';
-    }
-
-    if(chat && chat.messages.length) {
-      body += `<div style="margin-bottom:12px;"><strong style="color:var(--text-secondary); font-size:0.75rem; text-transform:uppercase;">Internal Team Chat</strong><div style="padding:8px 0; font-size:0.9rem;">${chat.messages.length} internal message(s). Use Start Team Conversation to view.</div></div>`;
-    }
-
-    if(!projects.length && !jobs.length && !notes.length && !(chat && chat.messages.length)) {
-      body = '<p style="color:var(--text-muted); text-align:center; padding:20px 0; font-size:0.9rem;">No events scheduled for this day.</p>';
-    }
-
-    document.getElementById('cal-action-body').innerHTML = body;
-    document.getElementById('cal-action-modal').classList.add('active');
-  }
-
-  function openCalNoteAttachment(noteId) {
-    const n = DB.calendarNotes.find(x => x.id === noteId);
-    if (!n || !n.attachment) return;
-    if (n.attachment.googleUrl) {
-      window.open(n.attachment.googleUrl, '_blank');
-      return;
-    }
-    const src = mediaSrc(n.attachment);
-    if (!src) {
-      alert('Session-only file — re-upload or connect cloud storage.');
-      return;
-    }
-    window.open(src, '_blank');
-  }
-
-  function deleteCalNote(id) {
-    if (!confirm('Remove this note?')) return;
-    DB.calendarNotes = DB.calendarNotes.filter(n => n.id !== id);
-    saveDB();
-    renderAll();
-    openCalDate(selectedCalDate);
-  }
-
-  function serviceOptionsHtml(selected = '') {
-    return DASH_SERVICE_OPTIONS.map(s => `<option value="${s}" ${selected === s ? 'selected' : ''}>${s}</option>`).join('');
-  }
-
-  function jobTypeOptionsHtml(selected = '') {
-    return JOB_TYPES.map(t => `<option value="${t}" ${selected === t ? 'selected' : ''}>${t}</option>`).join('');
-  }
-
-  function refreshClientSelects(selectedId = '') {
-    const options = '<option value="">Select...</option>' + DB.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-    ['cp-client', 'dj-client'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.innerHTML = options;
-        if (selectedId) el.value = selectedId;
-      }
-    });
-  }
-
-  function makeUniqueClientCode(name) {
-    let base = generateClientCode(name).toUpperCase();
-    let code = base;
-    let suffix = 1;
-    while (DB.clients.some(c => c.code === code)) {
-      code = base + suffix;
-      suffix++;
-    }
-    return code;
-  }
-
-  function addClientQuick(prefix) {
-    const firstName = document.getElementById(prefix + '-name').value.trim();
-    const surname = document.getElementById(prefix + '-surname').value.trim();
-    const initials = document.getElementById(prefix + '-initials').value.trim();
-    const phone = document.getElementById(prefix + '-phone').value.trim();
-    const email = document.getElementById(prefix + '-email').value.trim();
-    const address = document.getElementById(prefix + '-address').value.trim();
-
-    const fullName = [firstName, surname].filter(Boolean).join(' ').trim();
-
-    if (!fullName) {
-      alert('Client name is required.');
-      return null;
-    }
-
-    const autoInitials = (firstName && surname)
-      ? (firstName[0] + surname[0]).toUpperCase()
-      : fullName.slice(0, 2).toUpperCase();
-
-    const client = {
-      id: nextId('CLT', 'clients'),
-      code: makeUniqueClientCode(fullName),
-      name: fullName,
-      firstName,
-      surname,
-      initials: initials || autoInitials,
-      phone,
-      email,
-      address,
-      totalSpent: 0,
-      projects: 0,
-      status: 'active'
-    };
-
-    DB.clients.push(client);
-    saveDB();
-    logActivity(`added new client ${fullName} from dashboard`, 'user-plus', 'success');
-
-    refreshClientSelects(client.id);
-    filterJobProjects();
-
-    ['-name', '-surname', '-initials', '-phone', '-email', '-address'].forEach(suffix => {
-      document.getElementById(prefix + suffix).value = '';
-    });
-
-    return client.id;
-  }
-
-  function quickAddProjectClient() {
-    addClientQuick('cp-new-client');
-  }
-
-  function quickAddJobClient() {
-    addClientQuick('dj-new-client');
-  }
-
-  function toggleCpCustom() {
-    document.getElementById('cp-custom-wrap').style.display = document.getElementById('cp-service').value === 'Custom' ? 'block' : 'none';
-  }
-
-  function toggleDjCustom() {
-    document.getElementById('dj-custom-wrap').style.display = document.getElementById('dj-service').value === 'Custom' ? 'block' : 'none';
-  }
-
-  function toggleDjTypeCustom() {
-    document.getElementById('dj-type-custom-wrap').style.display = document.getElementById('dj-type').value === 'Custom' ? 'block' : 'none';
-  }
-
-  function toggleCpJobTypeCustom() {
-    document.getElementById('cp-job-type-custom-wrap').style.display = document.getElementById('cp-job-type').value === 'Custom' ? 'block' : 'none';
-  }
-
-  function toggleCpJobFields() {
-    document.getElementById('cp-job-fields').style.display = document.getElementById('cp-create-job').checked ? 'block' : 'none';
-  }
-
-  function toggleDjPeople() {
-    const unlimited = document.getElementById('dj-people-unlimited').checked;
-    const el = document.getElementById('dj-people');
-    el.disabled = unlimited;
-    if (unlimited) el.value = '';
-    if (!unlimited && el.value === '') el.value = 1;
-  }
-
-  function toggleCpJobPeople() {
-    const unlimited = document.getElementById('cp-job-people-unlimited').checked;
-    const el = document.getElementById('cp-job-people');
-    el.disabled = unlimited;
-    if (unlimited) el.value = '';
-    if (!unlimited && el.value === '') el.value = 1;
-  }
-
-  function openCalProjectModal() {
-    if (!selectedCalDate) return;
-    closeM('cal-action-modal');
-
-    document.getElementById('cp-name').value = '';
-    refreshClientSelects('');
-
-    ['cp-new-client-name','cp-new-client-surname','cp-new-client-initials','cp-new-client-phone','cp-new-client-email','cp-new-client-address'].forEach(id => {
-      document.getElementById(id).value = '';
-    });
-
-    document.getElementById('cp-service').innerHTML = serviceOptionsHtml('Graphic Design');
-    document.getElementById('cp-custom-wrap').style.display = 'none';
-    document.getElementById('cp-custom').value = '';
-    document.getElementById('cp-budget').value = '';
-    document.getElementById('cp-date').value = selectedCalDate;
-    document.getElementById('cp-priority').value = 'medium';
-    document.getElementById('cp-status').value = 'planning';
-    document.getElementById('cp-desc').value = '';
-
-    document.getElementById('cp-team').innerHTML = DB.staff.map(s => `<label style="display:flex;gap:6px;align-items:center;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:.85rem;"><input type="checkbox" value="${s.id}" style="accent-color:var(--primary);"> ${s.name}</label>`).join('');
-
-    document.getElementById('cp-create-job').checked = true;
-    document.getElementById('cp-job-title').value = 'Project Setup';
-    document.getElementById('cp-job-type').innerHTML = jobTypeOptionsHtml('Service Delivery');
-    document.getElementById('cp-job-type-custom-wrap').style.display = 'none';
-    document.getElementById('cp-job-type-custom').value = '';
-    document.getElementById('cp-job-assignee').innerHTML = '<option value="">Unassigned</option>' + DB.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    document.getElementById('cp-job-hours').value = 1;
-
-    document.getElementById('cp-job-people').disabled = false;
-    document.getElementById('cp-job-people').value = 1;
-    document.getElementById('cp-job-people-unlimited').checked = false;
-
-    toggleCpJobFields();
-    toggleCpJobTypeCustom();
-
-    openM('cal-project-modal');
-  }
-
-  function saveDashProject(openAfter) {
-    const name = document.getElementById('cp-name').value.trim();
-    const clientId = document.getElementById('cp-client').value;
-    if (!name || !clientId) {
-      alert('Project name and client are required.');
-      return;
-    }
-
-    const serviceSel = document.getElementById('cp-service').value;
-    const service = serviceSel === 'Custom' ? (document.getElementById('cp-custom').value.trim() || 'Custom Service') : serviceSel;
-    const budget = parseFloat(document.getElementById('cp-budget').value) || 0;
-    const dueDate = document.getElementById('cp-date').value || selectedCalDate;
-    const priority = document.getElementById('cp-priority').value;
-    const status = document.getElementById('cp-status').value;
-    const description = document.getElementById('cp-desc').value;
-    const assignees = [...document.querySelectorAll('#cp-team input:checked')].map(cb => cb.value);
-
-    const c = getClient(clientId);
-    const code = `${(c ? c.code : 'XX').toUpperCase()}${String(DB.projects.length + 1).padStart(2,'0')}-${fmtDateDMY(dueDate)}`;
-    const projectId = nextId('PRJ', 'projects');
-
-    const project = {
-      id: projectId,
-      code,
-      name,
-      clientId,
-      service,
-      budget,
-      spent: 0,
-      progress: 0,
-      status,
-      assignees,
-      dueDate,
-      priority,
-      description,
-      folders: [
-        { id: 'FLD-' + Date.now() + '-1', name: '📁 Branding & Design', attachments: [] },
-        { id: 'FLD-' + Date.now() + '-2', name: '📁 Client Documents', attachments: [] },
-        { id: 'FLD-' + Date.now() + '-3', name: ' Deliverables', attachments: [] }
-      ]
-    };
-
-    DB.projects.push(project);
-
-    if (document.getElementById('cp-create-job').checked) {
-      const jobTitle = document.getElementById('cp-job-title').value.trim();
-      if (jobTitle) {
-        const jobTypeSel = document.getElementById('cp-job-type').value;
-        const jobType = jobTypeSel === 'Custom' ? (document.getElementById('cp-job-type-custom').value.trim() || 'Custom Job') : jobTypeSel;
-        const jobPeople = document.getElementById('cp-job-people-unlimited').checked ? 'unlimited' : (parseInt(document.getElementById('cp-job-people').value) || 0);
-
-        DB.jobCards.push({
-          id: nextId('JC', 'jobCards'),
-          title: jobTitle,
-          clientId,
-          projectId,
-          assigneeId: document.getElementById('cp-job-assignee').value || null,
-          priority,
-          status: 'pending',
-          dueDate,
-          hours: parseFloat(document.getElementById('cp-job-hours').value) || 1,
-          people: jobPeople,
-          service,
-          type: jobType,
-          description: 'Linked job card created with project',
-          source: 'project'
-        });
-      }
-    }
-
-    logActivity(`created project ${name} from calendar`, 'briefcase', 'success');
-    saveDB();
-    closeM('cal-project-modal');
-
-    if (openAfter) {
-      localStorage.setItem('centoro_calendar_project_prefill', JSON.stringify({ dueDate, open: true }));
-      window.location.href = 'projects.html';
-    } else {
-      renderAll();
-      openCalDate(selectedCalDate);
-    }
-  }
-
-  function filterJobProjects(selectedProjectId = '') {
-    const clientId = document.getElementById('dj-client') ? document.getElementById('dj-client').value : '';
-    const list = DB.projects.filter(p => !clientId || p.clientId === clientId);
-    const el = document.getElementById('dj-project');
-    if (!el) return;
-    el.innerHTML = '<option value="">None / Walk-in</option>' + list.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-    if (selectedProjectId) el.value = selectedProjectId;
-  }
-
-  function openDashJobModal(fromCalendar = false) {
-    if (fromCalendar) closeM('cal-action-modal');
-
-    document.getElementById('dj-title').value = '';
-    refreshClientSelects('');
-
-    ['dj-new-client-name','dj-new-client-surname','dj-new-client-initials','dj-new-client-phone','dj-new-client-email','dj-new-client-address'].forEach(id => {
-      document.getElementById(id).value = '';
-    });
-
-    document.getElementById('dj-type').innerHTML = jobTypeOptionsHtml('Service Delivery');
-    document.getElementById('dj-type-custom-wrap').style.display = 'none';
-    document.getElementById('dj-type-custom').value = '';
-
-    document.getElementById('dj-service').innerHTML = serviceOptionsHtml('Graphic Design');
-    document.getElementById('dj-custom-wrap').style.display = 'none';
-    document.getElementById('dj-custom').value = '';
-
-    document.getElementById('dj-assignee').innerHTML = '<option value="">Unassigned</option>' + DB.staff.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    filterJobProjects();
-
-    document.getElementById('dj-priority').value = 'medium';
-    document.getElementById('dj-status').value = 'pending';
-    document.getElementById('dj-date').value = (fromCalendar && selectedCalDate) ? selectedCalDate : new Date().toISOString().slice(0, 10);
-    document.getElementById('dj-hours').value = 1;
-
-    document.getElementById('dj-people').disabled = false;
-    document.getElementById('dj-people').value = 1;
-    document.getElementById('dj-people-unlimited').checked = false;
-
-    document.getElementById('dj-desc').value = '';
-
-    toggleDjTypeCustom();
-    toggleDjCustom();
-
-    openM('cal-job-modal');
-  }
-
-  function saveDashJob() {
-    const title = document.getElementById('dj-title').value.trim();
-    const clientId = document.getElementById('dj-client').value;
-
-    if (!title) {
-      alert('Job title is required.');
-      return;
-    }
-    if (!clientId) {
-      alert('Select or add a client for this job card.');
-      return;
-    }
-
-    const typeSel = document.getElementById('dj-type').value;
-    const jobType = typeSel === 'Custom' ? (document.getElementById('dj-type-custom').value.trim() || 'Custom Job') : typeSel;
-
-    const serviceSel = document.getElementById('dj-service').value;
-    const service = serviceSel === 'Custom' ? (document.getElementById('dj-custom').value.trim() || 'Custom Service') : serviceSel;
-
-    const projectId = document.getElementById('dj-project').value || null;
-    const assigneeId = document.getElementById('dj-assignee').value || null;
-    const priority = document.getElementById('dj-priority').value;
-    const status = document.getElementById('dj-status').value;
-    const dueDate = document.getElementById('dj-date').value || new Date().toISOString().slice(0, 10);
-    const hours = parseFloat(document.getElementById('dj-hours').value) || 1;
-    const people = document.getElementById('dj-people-unlimited').checked ? 'unlimited' : (parseInt(document.getElementById('dj-people').value) || 0);
-    const description = document.getElementById('dj-desc').value;
-
-    DB.jobCards.push({
-      id: nextId('JC', 'jobCards'),
-      title,
-      clientId,
-      projectId,
-      assigneeId,
-      priority,
-      status,
-      dueDate,
-      hours,
-      people,
-      service,
-      type: jobType,
-      description,
-      source: projectId ? 'project' : 'walk-in'
-    });
-
-    logActivity(`issued job card ${title}`, 'clipboard', 'success');
-    saveDB();
-    closeM('cal-job-modal');
-    renderAll();
-
-    if (selectedCalDate && dueDate === selectedCalDate) {
-      openCalDate(selectedCalDate);
-    }
-  }
-
-  function openCalChatModal() {
-    if (!selectedCalDate) return;
-    closeM('cal-action-modal');
-    expandedTeamId = null;
-    ensureInternalChat(selectedCalDate);
-    document.getElementById('chat-date-label').textContent = fmtDate(selectedCalDate);
-    renderChatPeople();
-    renderInternalChat();
-    openM('cal-chat-modal');
-  }
-
-  function ensureInternalChat(date) {
-    let chat = DB.internalChats.find(c => c.date === date);
-    if (!chat) {
-      chat = {
-        id: nextId('ICH', 'internalChats'),
-        date,
-        subject: 'Team discussion',
-        cc: [],
-        messages: []
-      };
-      DB.internalChats.push(chat);
-      saveDB();
-    }
-    if (!chat.cc) chat.cc = [];
-    return chat;
-  }
-
-  function toggleTeamExpand(id) {
-    expandedTeamId = expandedTeamId === id ? null : id;
-    renderChatPeople();
-  }
-
-  function renderChatPeople() {
-    const chat = DB.internalChats.find(c => c.date === selectedCalDate);
-    if (!chat) return;
-    if (!chat.cc) chat.cc = [];
-
-    let html = '';
-
-    html += '<span class="cal-people-label">Teams — click to view/select members</span>';
-    html += '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">';
-
-    (DB.teams || []).forEach(t => {
-      const selectedTeam = chat.cc.includes(t.id);
-      const expanded = expandedTeamId === t.id;
-      const count = (t.members && t.members.length) ? t.members.length : DB.staff.length;
-      html += `<span class="cal-cc-badge cal-cc-chip ${selectedTeam ? 'selected' : ''}" onclick="toggleTeamExpand('${t.id}')">Team: ${t.name} (${count})${selectedTeam ? ' ✓' : ''}${expanded ? ' ▾' : ' ▸'}</span>`;
-    });
-
-    html += '</div>';
-
-    if (expandedTeamId) {
-      const t = (DB.teams || []).find(x => x.id === expandedTeamId);
-      if (t) {
-        const selectedTeam = chat.cc.includes(t.id);
-        const memberIds = (t.members && t.members.length) ? t.members : DB.staff.map(s => s.id);
-        const members = memberIds.map(id => getStaff(id)).filter(Boolean);
-
-        html += `<div class="cal-team-members">`;
-        html += `<div style="width:100%; font-size:.8rem; color:var(--text-secondary); margin-bottom:6px;"><strong>${t.name}</strong>${(t.members && t.members.length) ? '' : ' — no members assigned yet, showing all staff'}</div>`;
-        html += `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;"><span class="cal-cc-badge cal-cc-chip ${selectedTeam ? 'selected' : ''}" onclick="toggleChatCc('${t.id}')">Include whole team${selectedTeam ? ' ✓' : ''}</span></div>`;
-        html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
-
-        if (members.length) {
-          members.forEach(s => {
-            const selected = chat.cc.includes(s.id);
-            html += `<span class="cal-cc-badge cal-cc-chip ${selected ? 'selected' : ''}" onclick="toggleChatCc('${s.id}')">${s.name}${selected ? ' ✓' : ''}</span>`;
-          });
-        } else {
-          html += '<span style="color:var(--text-muted); font-size:.8rem;">No staff available.</span>';
-        }
-
-        html += `</div></div>`;
-      }
-    }
-
-    html += '<span class="cal-people-label">All Staff</span>';
-    html += '<div style="display:flex; flex-wrap:wrap; gap:6px;">';
-
-    DB.staff.forEach(s => {
-      const selected = chat.cc.includes(s.id);
-      html += `<span class="cal-cc-badge cal-cc-chip ${selected ? 'selected' : ''}" onclick="toggleChatCc('${s.id}')">${s.name}${selected ? ' ✓' : ''}</span>`;
-    });
-
-    html += '</div>';
-
-    document.getElementById('cal-chat-people').innerHTML = html;
-  }
-
-  function toggleChatCc(id) {
-    const chat = ensureInternalChat(selectedCalDate);
-    if (!chat.cc) chat.cc = [];
-
-    if (chat.cc.includes(id)) chat.cc = chat.cc.filter(x => x !== id);
-    else chat.cc.push(id);
-
-    saveDB();
-    renderChatPeople();
-    renderInternalChat();
-  }
-
-  function renderInternalChat() {
-    const chat = DB.internalChats.find(c => c.date === selectedCalDate);
-    if (!chat) return;
-    if (!chat.cc) chat.cc = [];
-
-    const ccHtml = chat.cc.map(cid => `<span class="cal-cc-badge">${ccLabel(cid)}</span>`).join('');
-
-    document.getElementById('cal-chat-thread').innerHTML =
-      (ccHtml ? `<div style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:4px;">${ccHtml}</div>` : '') +
-      (chat.messages.map(m => {
-        const s = getStaff(m.staffId);
-        return `<div class="cal-msg"><div>${m.text}</div><div class="meta">${s ? s.name : 'Admin'} · ${new Date(m.time).toLocaleString('en-ZA')}</div></div>`;
-      }).join('') || '<div style="color:var(--text-muted); font-size:.85rem;">No messages yet.</div>');
-
-    const el = document.getElementById('cal-chat-thread');
-    el.scrollTop = el.scrollHeight;
-  }
-
-  function sendInternalChat() {
-    const input = document.getElementById('cal-chat-input');
-    const text = input.value.trim();
-    if (!text) return;
-
-    const chat = ensureInternalChat(selectedCalDate);
-    chat.messages.push({
-      id: 'IMSG-' + Date.now(),
-      staffId: getCurrentUser().staffId || 'STF-0001',
-      text,
-      cc: chat.cc || [],
-      time: new Date().toISOString()
-    });
-
-    saveDB();
-    input.value = '';
-    renderInternalChat();
-  }
-
-  function openCalNoteModal() {
-    if (!selectedCalDate) return;
-    closeM('cal-action-modal');
-
-    document.getElementById('note-date-label').textContent = fmtDate(selectedCalDate);
-    document.getElementById('note-text').value = '';
-    document.getElementById('note-importance').value = 'medium';
-    document.getElementById('note-glink').value = '';
-    document.getElementById('note-file').value = '';
-    document.getElementById('note-file-label').innerHTML = 'No file selected.';
-
-    noteCcList = [];
-    populateNoteCcOptions();
-    renderNoteCc();
-
-    openM('cal-note-modal');
-  }
-
-  function populateNoteCcOptions() {
-    document.getElementById('note-cc-teams').innerHTML = (DB.teams || []).map(t => `<option value="${t.id}">Team: ${t.name}</option>`).join('') || '<option disabled>No teams</option>';
-    document.getElementById('note-cc-staff').innerHTML = DB.staff.map(s => `<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
-  }
-
-  function addNoteCc(sel) {
-    const v = sel.value;
-    if (v && !noteCcList.includes(v)) noteCcList.push(v);
-    sel.value = '';
-    renderNoteCc();
-  }
-
-  function removeNoteCc(cid) {
-    noteCcList = noteCcList.filter(x => x !== cid);
-    renderNoteCc();
-  }
-
-  function renderNoteCc() {
-    document.getElementById('note-cc-badges').innerHTML = noteCcList.map(cid => `<span class="cal-cc-badge">${ccLabel(cid)} <button style="background:none;border:none;color:#3b82f6;cursor:pointer;padding:0 0 0 4px;" onclick="removeNoteCc('${cid}')">×</button></span>`).join('') || '<span style="color:var(--text-muted); font-size:.8rem;">No people/teams CC'd.</span>';
-  }
-
-  function ccLabel(cid) {
-    if (cid.startsWith('TM-')) {
-      const t = (DB.teams || []).find(x => x.id === cid);
-      return 'Team: ' + (t ? t.name : cid);
-    }
-    const s = getStaff(cid);
-    return s ? s.name : cid;
-  }
-
-  function pickNoteFile(accept) {
-    const input = document.getElementById('note-file');
-    input.accept = accept;
-    input.value = '';
-    document.getElementById('note-file-label').innerHTML = 'No file selected.';
-    input.click();
-  }
-
-  function noteFileChosen(input) {
-    const f = input.files[0];
-    if (!f) {
-      document.getElementById('note-file-label').innerHTML = 'No file selected.';
-      return;
-    }
-    document.getElementById('note-file-label').innerHTML = `${fileIcon(f.name)} ${f.name} <small style="color:var(--text-muted);">(${(f.size / 1024).toFixed(0)} KB)</small>`;
-  }
-
-  function fileIcon(name, fileType) {
-    if (fileType === 'GOOGLE') return '📄';
-    const ext = String(fileType || name.split('.').pop() || '').toLowerCase();
-    if (['png','jpg','jpeg','gif','webp'].includes(ext)) return '🖼️';
-    if (['mp4','mov','avi','mkv','webm'].includes(ext)) return '🎬';
-    if (['mp3','wav','ogg','m4a','flac'].includes(ext)) return '🎵';
-    if (['pdf'].includes(ext)) return '';
-    if (['doc','docx','txt','rtf'].includes(ext)) return '';
-    if (['xls','xlsx','csv'].includes(ext)) return '';
-    if (['ppt','pptx'].includes(ext)) return '📽️';
-    if (['zip','rar','7z','gz'].includes(ext)) return '';
-    return '📎';
-  }
-
-  function saveCalNote() {
-    const text = document.getElementById('note-text').value.trim();
-    const file = document.getElementById('note-file').files[0];
-    const glink = document.getElementById('note-glink').value.trim();
-    const importance = document.getElementById('note-importance').value;
-
-    if (!text && !file && !glink) {
-      alert('Add note text, upload a file, or paste a Google link.');
-      return;
-    }
-
-    const baseNote = {
-      id: nextId('CND', 'calendarNotes'),
-      date: selectedCalDate,
-      text,
-      importance,
-      cc: [...noteCcList],
-      attachment: null,
-      createdAt: new Date().toISOString(),
-      createdBy: getCurrentUser().name || 'Admin'
-    };
-
-    if (file) {
-      const ext = (file.name.split('.').pop() || 'FILE').toUpperCase();
-      const att = {
-        id: 'ATT-' + Date.now(),
-        name: file.name,
-        fileType: ext,
-        dataUrl: null
-      };
-
-      if (file.size <= 2000000) {
-        fileToDataUrl(file, d => {
-          att.dataUrl = d;
-          baseNote.attachment = att;
-          finishSaveNote(baseNote);
-        });
-      } else {
-        window.MEDIA[att.id] = URL.createObjectURL(file);
-        att.mediaNote = 'session (large file — cloud sync via API)';
-        baseNote.attachment = att;
-        finishSaveNote(baseNote);
-      }
-    } else if (glink) {
-      const gName = glink.includes('spreadsheets') ? 'Google Sheet' : 'Google Doc';
-      baseNote.attachment = {
-        id: 'ATT-' + Date.now(),
-        name: gName,
-        fileType: 'GOOGLE',
-        googleUrl: glink,
-        dataUrl: null
-      };
-      finishSaveNote(baseNote);
-    } else {
-      finishSaveNote(baseNote);
-    }
-  }
-
-  async function finishSaveNote(note) {
-    try {
-      const response = await ApiService.createCalendarNote(note);
-      const saved = response.data || note;
-      DB.calendarNotes.push({ ...saved, id: String(saved.id), date: String(saved.date).slice(0, 10) });
-      saveDB();
-      closeM('cal-note-modal');
-      renderAll();
-      openCalDate(selectedCalDate);
-    } catch (error) {
-      alert(error.message || 'Unable to save calendar note to the API.');
-    }
-  }
-
-  function tzTime(zone) {
-    try {
-      // ✅ FIX: Added 'second: 2-digit' so the clock actually ticks visibly
-      return new Date().toLocaleTimeString('en-ZA', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch(e) {
-      return '—';
-    }
-  }
-
-  function tzDate(zone) {
-    try {
-      return new Date().toLocaleDateString('en-ZA', { timeZone: zone, day: '2-digit', month: 'short', year: 'numeric' });
-    } catch(e) {
-      return '—';
-    }
-  }
-
-  function renderDashWidgets() {
-    const curs = DB.currencies.filter(c => !c.base).slice(0, 3).map(c => `<strong>${c.code}</strong> ${Number(c.ratePerZAR).toFixed(4)}`).join(' &nbsp;|&nbsp; ');
-    document.getElementById('dash-currencies').innerHTML = `Base: <strong>ZAR</strong> &nbsp;|&nbsp; ${curs || 'No other currencies'}`;
-
-    const widgetZones = TIME_ZONES.slice(0, 3).map(z => `<strong>${z.city}</strong> ${tzTime(z.zone)}`).join(' &nbsp;|&nbsp; ');
-    document.getElementById('dash-timezones').innerHTML = widgetZones;
-  }
-
-  function renderRatesModal() {
-    document.getElementById('rates-modal-table').innerHTML = DB.currencies.map(c => {
-      const inverse = c.base ? fmtZAR(1) : (c.ratePerZAR ? fmtZAR(1 / c.ratePerZAR) : '—');
-      return `<tr>
-        <td><strong>${c.code}</strong>${c.base ? ' <span class="badge badge-success">BASE</span>' : ''}</td>
-        <td>${c.name}</td>
-        <td>${c.symbol || ''}</td>
-        <td>${c.base ? '1.0000' : Number(c.ratePerZAR).toFixed(4)}</td>
-        <td>${inverse}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  function renderTimeZones() {
-    document.getElementById('tz-modal-table').innerHTML = TIME_ZONES.map(z => `<tr>
-      <td><strong>${z.city}</strong></td>
-      <td>${z.zone}</td>
-      <td>${tzTime(z.zone)}</td>
-      <td>${tzDate(z.zone)}</td>
-    </tr>`).join('');
-  }
-
-  function renderDashJobs() {
-    const activeJobs = DB.jobCards.filter(j => j.status !== 'completed').slice(0, 5);
-    const internalTypes = ['IT Department', 'Office Admin', 'Accounting', 'Management', 'Development'];
-
-    document.getElementById('dash-jobs-table').innerHTML = activeJobs.map(j => {
-      const s = getStaff(j.assigneeId);
-      const client = getClient(j.clientId);
-      const stBadge = { pending: 'neutral', in_progress: 'warning', completed: 'success' }[j.status] || 'neutral';
-      const meta = [j.type, j.service, peopleMeta(j)].filter(Boolean).join(' · ');
-
-      let badge = '';
-      if (!j.projectId) {
-        badge = internalTypes.includes(j.type)
-          ? '<span class="badge badge-neutral">Internal</span>'
-          : '<span class="badge badge-neutral">Walk-in</span>';
-      }
-
-      return `<tr style="cursor:pointer;" onclick="location.href='jobcards.html'">
-        <td><strong>${j.title}</strong>${meta ? `<br><small style="color:var(--text-muted);">${meta}</small>` : ''} ${badge}</td>
-        <td>${client ? client.name : '—'}</td>
-        <td>${s ? s.name : '—'}</td>
-        <td>${fmtDate(j.dueDate)}</td>
-        <td><span class="badge badge-${stBadge}">${j.status.replace('_', ' ')}</span></td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">No active job cards.</td></tr>';
-  }
-
-  function renderAll() {
-    const rev = DB.payments.reduce((s, p) => s + p.amount, 0);
-    const out = DB.invoices.reduce((s, i) => s + (i.total - i.paid), 0);
-    document.getElementById('k-rev').textContent = fmtZAR(rev);
-    document.getElementById('k-out').textContent = fmtZAR(out);
-    document.getElementById('k-proj').textContent = DB.projects.filter(p => p.status !== 'completed').length;
-    document.getElementById('k-comp').textContent = DB.chats.filter(c => c.status === 'open').length;
-
-    const ys = DB.website.yearlyStats;
-    document.getElementById('year-bars').innerHTML = Object.entries(ys).map(([yr, y]) => {
-      const target = y.target || Math.max(y.revenue, 1);
-      const pct = Math.min(100, y.revenue / target * 100);
-      return `<div class="year-row"><div style="display:flex;justify-content:space-between;font-size:.85rem;"><span><strong>${yr}</strong>${y.target ? ` <span style="color:var(--text-muted);">target ${fmtZAR(y.target)}</span>` : ''}</span><strong style="color:var(--primary);">${fmtZAR(y.revenue)}</strong></div><div style="height:10px;background:var(--bg-elevated);border-radius:5px;overflow:hidden;margin-top:4px;"><div style="width:${pct}%;height:100%;background:${yr === '2026' ? 'var(--primary)' : 'var(--success)'};"></div></div><div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">${pct.toFixed(0)}% of ${yr === '2026' ? 'target' : 'best year'}</div></div>`;
-    }).join('');
-
-    const alerts = buildAlerts();
-    document.getElementById('bell-count').textContent = alerts.length;
-    document.getElementById('alert-list').innerHTML = alerts.slice(0, 6).map(a => `<div class="bell-item" onclick="location.href='${a.href}'"><span class="dot" style="background:${a.color};"></span><span>${a.text}</span></div>`).join('') || '<p style="color:var(--text-muted);padding:14px;">All clear — no alerts.</p>';
-    document.getElementById('bell-panel').innerHTML = `<div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;color:var(--text-primary);">Notifications (${alerts.length})</div>` + (alerts.map(a => `<div class="bell-item" onclick="location.href='${a.href}'"><span class="dot" style="background:${a.color};"></span><span>${a.text}</span></div>`).join('') || '<p style="color:var(--text-muted);padding:14px;">All clear.</p>');
-
-    document.getElementById('activity-list').innerHTML = DB.activity.slice(0, 6).map(a => `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;"><div style="width:32px;height:32px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i data-feather="${a.icon}" style="width:15px;height:15px;color:var(--${a.color});"></i></div><div><strong style="cursor:pointer; text-decoration:underline;" onclick="location.href='staff.html'">${a.user}</strong> ${a.action}<div style="font-size:.75rem;color:var(--text-muted);">${a.time}</div></div></div>`).join('');
-
-    document.getElementById('inv-table').innerHTML = DB.invoices.slice(0, 5).map(i => {
-      const c = getClient(i.clientId);
-      const bc = { paid: 'success', partial: 'warning', unpaid: 'danger', overdue: 'danger' }[i.status];
-      return `<tr style="cursor:pointer;" onclick="location.href='invoices.html'"><td><strong>#${i.trackingNumber}</strong></td><td>${c ? c.name : '—'}</td><td>${fmtZAR(i.total)}</td><td>${fmtZAR(i.paid)}</td><td><span class="badge badge-${bc}">${i.status}</span></td></tr>`;
-    }).join('');
-
-    renderDashWidgets();
-    renderCalendar();
-    renderDashJobs();
-    renderRatesModal();
-    renderTimeZones();
-    feather.replace();
-  }
-
-  function toggleBell() {
-    document.getElementById('bell-panel').classList.toggle('open');
-  }
-
-  function getAfterSection(container, y) {
-    return [...container.querySelectorAll('.dash-section:not(.dragging)')].reduce((closest, child) => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      if (offset < 0 && offset > closest.offset) return { offset, element: child };
-      return closest;
-    }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
-  }
-
-  function getAfterCard(container, y) {
-    return [...container.querySelectorAll('.dash-draggable:not(.dragging)')].reduce((closest, child) => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      if (offset < 0 && offset > closest.offset) return { offset, element: child };
-      return closest;
-    }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
-  }
-
-  function applyDashboardLayout() {
-    const secContainer = document.getElementById('dashboard-sections');
-    const secOrder = (DB.dashboardLayout && DB.dashboardLayout.sections) || [];
-
-    secOrder.forEach(id => {
-      const el = document.getElementById(id);
-      if (el && el.parentNode === secContainer) secContainer.appendChild(el);
-    });
-
-    const inner = (DB.dashboardLayout && DB.dashboardLayout.inner) || {};
-    Object.keys(inner).forEach(key => {
-      const container = document.querySelector(`[data-dash-inner="${key}"]`);
-      if (!container) return;
-      (inner[key] || []).forEach(id => {
-        const el = document.getElementById(id);
-        if (el && el.parentNode === container) container.appendChild(el);
-      });
-    });
-  }
-
-  function saveSectionLayout() {
-    const container = document.getElementById('dashboard-sections');
-    if (!container) return;
-    DB.dashboardLayout.sections = [...container.querySelectorAll('.dash-section')].map(el => el.id);
-    saveDB();
-  }
-
-  function saveInnerLayout(key) {
-    const container = document.querySelector(`[data-dash-inner="${key}"]`);
-    if (!container) return;
-    DB.dashboardLayout.inner[key] = [...container.querySelectorAll('.dash-draggable')].map(el => el.id);
-    saveDB();
-  }
-
-  function enableDashboardDrag() {
-    const secContainer = document.getElementById('dashboard-sections');
-
-    document.querySelectorAll('.dash-section').forEach(section => {
-      section.setAttribute('draggable', 'true');
-
-      section.addEventListener('dragstart', e => {
-        if (e.target.closest('.dash-draggable, button, input, select, textarea, a, .bell-wrap, .icon-btn, .modal-overlay')) {
-          e.preventDefault();
-          return;
-        }
-        section.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', section.id);
-      });
-
-      section.addEventListener('dragend', () => {
-        section.classList.remove('dragging');
-        saveSectionLayout();
-      });
-    });
-
-    secContainer.addEventListener('dragover', e => {
-      const dragging = secContainer.querySelector('.dash-section.dragging');
-      if (!dragging) return;
-      e.preventDefault();
-      const after = getAfterSection(secContainer, e.clientY);
-      if (after == null) secContainer.appendChild(dragging);
-      else secContainer.insertBefore(dragging, after);
-    });
-
-    secContainer.addEventListener('drop', e => e.preventDefault());
-
-    document.querySelectorAll('[data-dash-inner]').forEach(container => {
-      const key = container.getAttribute('data-dash-inner');
-
-      container.querySelectorAll('.dash-draggable').forEach(card => {
-        card.setAttribute('draggable', 'true');
-
-        card.addEventListener('dragstart', e => {
-          if (e.target.closest('button, input, select, textarea, a')) {
-            e.preventDefault();
-            return;
-          }
-          e.stopPropagation();
-          card.classList.add('dragging');
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', card.id);
-        });
-
-        card.addEventListener('dragend', e => {
-          e.stopPropagation();
-          card.classList.remove('dragging');
-          saveInnerLayout(key);
-        });
-      });
-
-      container.addEventListener('dragover', e => {
-        const dragging = container.querySelector('.dash-draggable.dragging');
-        if (!dragging) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const after = getAfterCard(container, e.clientY);
-        if (after == null) container.appendChild(dragging);
-        else container.insertBefore(dragging, after);
-      });
-
-      container.addEventListener('drop', e => {
-        e.preventDefault();
-        e.stopPropagation();
-      });
-    });
-  }
-
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.bell-wrap')) document.getElementById('bell-panel').classList.remove('open');
-  });
-
-  applyDashboardLayout();
-  enableDashboardDrag();
-
-  // ✅ NEW: Live Global Time Zone Ticker
-  function tickTimeZones() {
-    // Update dashboard widget timezones
-    const widgetZones = TIME_ZONES.slice(0, 3).map(z => `<strong>${z.city}</strong> ${tzTime(z.zone)}`).join(' &nbsp;|&nbsp; ');
-    const dashTzEl = document.getElementById('dash-timezones');
-    if (dashTzEl) dashTzEl.innerHTML = widgetZones;
-
-    // Update modal timezones
-    const tzModalTable = document.getElementById('tz-modal-table');
-    if (tzModalTable) {
-      tzModalTable.innerHTML = TIME_ZONES.map(z => `<tr>
-        <td><strong>${z.city}</strong></td>
-        <td>${z.zone}</td>
-        <td>${tzTime(z.zone)}</td>
-        <td>${tzDate(z.zone)}</td>
-      </tr>`).join('');
-    }
-  }
-
-  // Start ticking every second
-  setInterval(tickTimeZones, 1000);
-</script>
-<script>
-let dashboardSupportLoaded = false;
-
-async function loadDashboardSupportData() {
-  if (dashboardSupportLoaded) return;
-  const [ratesResult, zonesResult, notesResult] = await Promise.allSettled([
-    ApiService.getCurrencyRates(),
-    ApiService.getTimezones(),
-    ApiService.getCalendarNotes()
-  ]);
-
-  if (ratesResult.status === 'fulfilled') {
-    const payload = ratesResult.value.data || {};
-    const rates = payload.rates || {};
-    DB.currencies = [
-      { code: 'ZAR', name: 'South African Rand', symbol: 'R', ratePerZAR: 1, base: true },
-      ...Object.entries(rates).map(([code, rate]) => ({
-        code,
-        name: code,
-        symbol: code,
-        ratePerZAR: Number(rate) || 0,
-        base: false
-      }))
-    ];
-  }
-
-  if (zonesResult.status === 'fulfilled') {
-    TIME_ZONES = (zonesResult.value.data || []).map(zone => ({
-      city: zone.city || zone.zone,
-      zone: zone.zone,
-      time: zone.time,
-      date: zone.date
-    }));
-  }
-
-  if (notesResult.status === 'fulfilled') {
-    DB.calendarNotes = (notesResult.value.data || []).map(note => ({
-      ...note,
-      id: String(note.id),
-      date: String(note.date).slice(0, 10)
-    }));
-  }
-
-  dashboardSupportLoaded = true;
+// Minimal fallback if ApiService is not available
+window.ApiService = window.ApiService || {
+  getDashboardStats: async () => ({ data: { totalRevenue: 0, totalOutstanding: 0, activeProjects: 0, openChats: 0 } }),
+  getProjects: async () => ({ data: [] }),
+  getInvoices: async () => ({ data: [] }),
+  getJobCards: async () => ({ data: [] }),
+  getCurrencyRates: async () => ({ data: { rates: {} } }),
+  getTimezones: async () => ({ data: [] }),
+  getCalendarNotes: async () => ({ data: [] }),
+  logout: () => {}
+};
+
+// Global DB object
+window.DB = {
+  currencies: [{ code: 'ZAR', name: 'South African Rand', symbol: 'R', ratePerZAR: 1, base: true }],
+  calendarNotes: [],
+  payments: [],
+  invoices: [],
+  projects: [],
+  chats: [],
+  activity: [],
+  website: { yearlyStats: { '2026': { revenue: 0, target: 300000 } } }
+};
+
+let TIME_ZONES = [
+  { city: 'Johannesburg', zone: 'Africa/Johannesburg' },
+  { city: 'London', zone: 'Europe/London' },
+  { city: 'New York', zone: 'America/New_York' }
+];
+
+function fmtZAR(n) { return 'R ' + Number(n || 0).toLocaleString('en-ZA'); }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-ZA') : '—'; }
+
+function tzTime(zone) {
+  try { return new Date().toLocaleTimeString('en-ZA', { timeZone: zone, hour: '2-digit', minute: '2-digit' }); }
+  catch(e) { return '—'; }
 }
 
-// Enhance existing renderAll to use API for live data
-window.renderAll = async function() {
-  const layout = document.querySelector('.app-layout');
-  const showMessage = (id, message, colspan = 1) => {
-    const element = document.getElementById(id);
-    if (!element) return;
-    element.innerHTML = element.tagName === 'TBODY'
-      ? `<tr><td colspan="${colspan}" style="padding:16px;text-align:center;color:var(--text-muted);">${message}</td></tr>`
-      : `<div style="padding:16px;color:var(--text-muted);">${message}</div>`;
-  };
+function renderCalendar() {
+  const now = new Date();
+  const month = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  document.getElementById('calendar-grid').innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px; color: #94a3b8;">${month}</div>`;
+}
 
-    try {
-    await loadDashboardSupportData();
-    const [stats, projects, invoices, jobs] = await Promise.all([
+function renderDashWidgets() {
+  document.getElementById('dash-currencies').innerHTML = 'Base: <strong>ZAR</strong> | <strong>USD</strong> 0.0601 | <strong>EUR</strong> 0.0540';
+  document.getElementById('dash-timezones').innerHTML = '<strong>Johannesburg</strong> ' + tzTime('Africa/Johannesburg') + ' | <strong>London</strong> ' + tzTime('Europe/London');
+}
+
+function renderDashJobs() {
+  document.getElementById('dash-jobs-table').innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No active job cards</td></tr>';
+}
+
+function renderRatesModal() {}
+function renderTimeZones() {}
+
+window.renderAll = async function() {
+  try {
+    const [stats, invoices, jobs] = await Promise.all([
       ApiService.getDashboardStats(),
-      ApiService.getProjects(),
       ApiService.getInvoices(),
       ApiService.getJobCards()
     ]);
+    
     const d = stats.data || {};
-    const invoiceRows = invoices.data || [];
-    const jobRows = jobs.data || [];
-
-    document.getElementById('k-rev').textContent = 'R ' + Number(d.totalRevenue || 0).toLocaleString('en-ZA');
-    document.getElementById('k-out').textContent = 'R ' + Number(d.totalOutstanding || 0).toLocaleString('en-ZA');
+    document.getElementById('k-rev').textContent = fmtZAR(d.totalRevenue);
+    document.getElementById('k-out').textContent = fmtZAR(d.totalOutstanding);
     document.getElementById('k-proj').textContent = d.activeProjects || 0;
     document.getElementById('k-comp').textContent = d.openChats || 0;
-
-    const invoiceTable = document.getElementById('inv-table');
-    if (invoiceTable) invoiceTable.innerHTML = invoiceRows.slice(0, 5).map(invoice => `<tr><td><strong>#${invoice.trackingNumber || invoice.id || '—'}</strong></td><td>${invoice.clientId || '—'}</td><td>R ${Number(invoice.total || 0).toLocaleString('en-ZA')}</td><td>R ${Number(invoice.paid || 0).toLocaleString('en-ZA')}</td><td>${invoice.status || '—'}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No invoices found.</td></tr>';
-
-    const jobsTable = document.getElementById('dash-jobs-table');
-    if (jobsTable) jobsTable.innerHTML = jobRows.slice(0, 5).map(job => `<tr><td>${job.title || job.name || '—'}</td><td>${job.clientId || '—'}</td><td>${job.assigneeId || '—'}</td><td>${job.dueDate || '—'}</td><td>${job.status || '—'}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No job cards found.</td></tr>';
-
-    showMessage('year-bars', 'Live data connected.');
-    showMessage('alert-list', 'No live alerts loaded.');
-    showMessage('activity-list', 'No live activity loaded.');
-    renderDashWidgets();
-    renderRatesModal();
-    renderTimeZones();
-    } catch (error) {
-    console.error('Dashboard API unavailable:', error.message);
-    ['k-rev', 'k-out', 'k-proj', 'k-comp'].forEach(id => { const element = document.getElementById(id); if (element) element.textContent = '—'; });
-    showMessage('year-bars', 'Unable to load live dashboard data.');
-    showMessage('alert-list', 'Unable to load live dashboard data.');
-    showMessage('activity-list', 'Unable to load live dashboard data.');
-    showMessage('dash-currencies', 'Unable to load live dashboard data.');
-    showMessage('dash-timezones', 'Unable to load live dashboard data.');
-    showMessage('inv-table', 'Unable to load live dashboard data.');
-    showMessage('dash-jobs-table', 'Unable to load live dashboard data.');
-    }
-  if (layout) layout.classList.add('app-ready');
+    
+    const invoiceRows = invoices.data || [];
+    document.getElementById('inv-table').innerHTML = invoiceRows.slice(0, 5).map(inv => 
+      `<tr><td><strong>#${inv.trackingNumber || '—'}</strong></td><td>${inv.clientId || '—'}</td><td>${fmtZAR(inv.total)}</td><td>${fmtZAR(inv.paid)}</td><td>${inv.status || '—'}</td></tr>`
+    ).join('') || '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No invoices found</td></tr>';
+    
+    const jobRows = jobs.data || [];
+    document.getElementById('dash-jobs-table').innerHTML = jobRows.slice(0, 5).map(job =>
+      `<tr><td>${job.title || '—'}</td><td>${job.clientId || '—'}</td><td>${job.assigneeId || '—'}</td><td>${fmtDate(job.dueDate)}</td><td>${job.status || '—'}</td></tr>`
+    ).join('') || '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No job cards found</td></tr>';
+    
+  } catch (error) {
+    console.error('API Error:', error);
+  }
+  
+  renderDashWidgets();
+  renderCalendar();
+  renderDashJobs();
+  
+  if (window.feather) feather.replace();
 };
 
-      renderAll();
-
-// Override logout to clear API token
-const originalLogout = window.logout;
-window.logout = function() {
-    ApiService.logout();
-    if (typeof originalLogout === 'function') {
-        originalLogout();
-    }
-};
+// Initialize
+renderAll();
+setInterval(() => {
+  const tzEl = document.getElementById('dash-timezones');
+  if (tzEl) tzEl.innerHTML = '<strong>Johannesburg</strong> ' + tzTime('Africa/Johannesburg') + ' | <strong>London</strong> ' + tzTime('Europe/London');
+}, 1000);
 </script>
 </body>
 </html>
