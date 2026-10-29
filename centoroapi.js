@@ -61,8 +61,8 @@ class CentoroApiService {
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const controller = new AbortController();
         
-        // ✅ FIX: Give login 120s, and all other requests 60s to allow Render to wake up from sleep
-        const timeoutMs = endpoint === '/auth/login' ? 120000 : (options.timeout || 60000);
+        // FIX 1: Give login 120 seconds, and all other requests 60 seconds to allow Render to wake up from sleep
+        const timeoutMs = endpoint === '/auth/login' ? 120000 : 60000;
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         
         const config = { method, headers, ...options, signal: controller.signal };
@@ -74,7 +74,7 @@ class CentoroApiService {
         try {
             const response = await fetch(url, config);
             
-            // ✅ FIX: Do NOT show "Session expired" if the user is actively trying to log in
+            // FIX 2: Do NOT show "Session expired" if the user is actively trying to log in
             if (response.status === 401 && endpoint !== '/auth/login') {
                 this.clearToken();
                 if (!window.location.pathname.includes('login.html')) {
@@ -140,15 +140,11 @@ class CentoroApiService {
             smsCampaigns: () => this.getSmsCampaigns(),
             staffChats: () => this.getStaffChats(),
             bin: () => this.getBinItems(),
-            analytics: () => this.getAnalytics(),
-            // ✅ NEW: Dashboard support functions
-            currencyRates: () => this.getCurrencyRates(),
-            timezones: () => this.getTimezones(),
-            calendarNotes: () => this.getCalendarNotes()
+            analytics: () => this.getAnalytics()
         };
 
         const pageCollections = {
-            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers', 'currencyRates', 'timezones', 'calendarNotes'],
+            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers'],
             'projects.html': ['clients', 'projects', 'staff', 'jobCards'],
             'clients.html': ['clients', 'projects', 'invoices'],
             'staff.html': ['staff', 'projects'],
@@ -195,26 +191,10 @@ class CentoroApiService {
             else if (name === 'portfolio') target.works = (value || []).map(item => ({ ...item, id: String(item.id), sub: item.subcategory, dataUrl: item.imageUrl }));
             else if (name === 'staffChats') target.staffChats = value || [];
             else if (name === 'phoneContacts') target.phoneBook = value || [];
-            else if (name === 'currencyRates') target.currencies = this.formatCurrencyRates(value);
-            else if (name === 'timezones') target.timezones = value;
-            else if (name === 'calendarNotes') target.calendarNotes = (value || []).map(note => ({ ...note, id: String(note.id), date: String(note.date).slice(0, 10) }));
             else target[name] = value || [];
         });
         this.snapshots.set(target, JSON.parse(JSON.stringify(target)));
         return { failures: 0, loaded: collections.length };
-    }
-
-    // Helper to format currency rates for the dashboard
-    formatCurrencyRates(response) {
-        if (!response || !response.data || !response.data.rates) return [];
-        const rates = response.data.rates;
-        return Object.keys(rates).map(code => ({
-            code,
-            name: code,
-            symbol: code,
-            ratePerZAR: Number(rates[code]) || 0,
-            base: code === response.data.base
-        }));
     }
 
     persistAdminData(target) {
@@ -381,6 +361,8 @@ class CentoroApiService {
 
     // ============ DASHBOARD ============
     async getDashboardStats() { return this.request('GET', '/dashboard/stats'); }
+    
+    // FIX 3: Added missing dashboard support functions
     async getCurrencyRates() { return this.request('GET', '/currency/rates'); }
     async getTimezones() { return this.request('GET', '/currency/timezones'); }
     async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
