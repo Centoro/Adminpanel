@@ -61,7 +61,6 @@ class CentoroApiService {
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const controller = new AbortController();
         
-        // FIX 1: Give login 120 seconds, and all other requests 60 seconds to allow Render to wake up from sleep
         const timeoutMs = endpoint === '/auth/login' ? 120000 : 60000;
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         
@@ -74,7 +73,6 @@ class CentoroApiService {
         try {
             const response = await fetch(url, config);
             
-            // FIX 2: Do NOT show "Session expired" if the user is actively trying to log in
             if (response.status === 401 && endpoint !== '/auth/login') {
                 this.clearToken();
                 if (!window.location.pathname.includes('login.html')) {
@@ -140,11 +138,14 @@ class CentoroApiService {
             smsCampaigns: () => this.getSmsCampaigns(),
             staffChats: () => this.getStaffChats(),
             bin: () => this.getBinItems(),
-            analytics: () => this.getAnalytics()
+            analytics: () => this.getAnalytics(),
+            currencyRates: () => this.getCurrencyRates(),
+            timezones: () => this.getTimezones(),
+            calendarNotes: () => this.getCalendarNotes()
         };
 
         const pageCollections = {
-            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers'],
+            'index.html': ['clients', 'staff', 'projects', 'jobCards', 'invoices', 'chats', 'vouchers', 'currencyRates', 'timezones', 'calendarNotes'],
             'projects.html': ['clients', 'projects', 'staff', 'jobCards'],
             'clients.html': ['clients', 'projects', 'invoices'],
             'staff.html': ['staff', 'projects'],
@@ -191,10 +192,25 @@ class CentoroApiService {
             else if (name === 'portfolio') target.works = (value || []).map(item => ({ ...item, id: String(item.id), sub: item.subcategory, dataUrl: item.imageUrl }));
             else if (name === 'staffChats') target.staffChats = value || [];
             else if (name === 'phoneContacts') target.phoneBook = value || [];
+            else if (name === 'currencyRates') target.currencies = this.formatCurrencyRates(value);
+            else if (name === 'timezones') target.timezones = value;
+            else if (name === 'calendarNotes') target.calendarNotes = (value || []).map(note => ({ ...note, id: String(note.id), date: String(note.date).slice(0, 10) }));
             else target[name] = value || [];
         });
         this.snapshots.set(target, JSON.parse(JSON.stringify(target)));
         return { failures: 0, loaded: collections.length };
+    }
+
+    formatCurrencyRates(response) {
+        if (!response || !response.data || !response.data.rates) return [];
+        const rates = response.data.rates;
+        return Object.keys(rates).map(code => ({
+            code,
+            name: code,
+            symbol: code,
+            ratePerZAR: Number(rates[code]) || 0,
+            base: code === response.data.base
+        }));
     }
 
     persistAdminData(target) {
@@ -321,7 +337,6 @@ class CentoroApiService {
         return results;
     }
 
-    // ============ AUTH ============
     async login(identifier, password, channel = 'email') {
         try {
             const response = await this.request('POST', '/auth/login', { 
@@ -359,15 +374,11 @@ class CentoroApiService {
     logout() { this.clearToken(); window.location.href = 'login.html'; }
     getCurrentUser() { return this.getUser(); }
 
-    // ============ DASHBOARD ============
     async getDashboardStats() { return this.request('GET', '/dashboard/stats'); }
-    
-    // FIX 3: Added missing dashboard support functions
     async getCurrencyRates() { return this.request('GET', '/currency/rates'); }
     async getTimezones() { return this.request('GET', '/currency/timezones'); }
     async getCalendarNotes() { return this.request('GET', '/calendar/notes'); }
 
-    // ============ CLIENTS ============
     async getClients() { return this.request('GET', '/clients'); }
     async getClient(id) { return this.request('GET', `/clients/${id}`); }
     async createClient(data) { return this.request('POST', '/clients', data); }
@@ -379,14 +390,12 @@ class CentoroApiService {
     async restoreClient(id) { return this.request('POST', `/clients/${id}/restore`); }
     async hardDeleteClient(id) { return this.request('DELETE', `/clients/${id}/permanent`); }
 
-    // ============ STAFF ============
     async getStaff() { return this.request('GET', '/staff'); }
     async getStaffMember(id) { return this.request('GET', `/staff/${id}`); }
     async createStaff(data) { return this.request('POST', '/staff', data); }
     async updateStaff(id, data) { return this.request('PUT', `/staff/${id}`, data); }
     async deleteStaff(id) { return this.request('DELETE', `/staff/${id}`); }
 
-    // ============ PROJECTS ============
     async getProjects() { return this.request('GET', '/projects'); }
     async getProject(id) { return this.request('GET', `/projects/${id}`); }
     async getProjectsByClient(clientId) { return this.request('GET', `/projects/client/${clientId}`); }
@@ -395,7 +404,6 @@ class CentoroApiService {
     async deleteProject(id) { return this.request('DELETE', `/projects/${id}`); }
     async getProjectStats() { return this.request('GET', '/projects/stats'); }
 
-    // ============ INVOICES ============
     async getInvoices() { return this.request('GET', '/invoices'); }
     async getInvoice(id) { return this.request('GET', `/invoices/${id}`); }
     async getInvoicesByClient(clientId) { return this.request('GET', `/invoices/client/${clientId}`); }
@@ -405,7 +413,6 @@ class CentoroApiService {
     async markInvoicePaid(id, amount) { return this.request('POST', `/invoices/${id}/payment`, { amount, method: 'EFT', date: new Date().toISOString().slice(0, 10) }); }
     async getInvoiceStats() { return this.request('GET', '/invoices/stats'); }
 
-    // ============ JOB CARDS ============
     async getJobCards() { return this.request('GET', '/jobcards'); }
     async getJobCard(id) { return this.request('GET', `/jobcards/${id}`); }
     async getJobCardsByClient(clientId) { return this.request('GET', `/jobcards/client/${clientId}`); }
@@ -415,7 +422,6 @@ class CentoroApiService {
     async deleteJobCard(id) { return this.request('DELETE', `/jobcards/${id}`); }
     async getJobCardStats() { return this.request('GET', '/jobcards/stats'); }
 
-    // ============ VOUCHERS ============
     async getVouchers() { return this.request('GET', '/vouchers'); }
     async getVoucher(id) { return this.request('GET', `/vouchers/${id}`); }
     async createVoucher(data) { return this.request('POST', '/vouchers', data); }
@@ -424,7 +430,6 @@ class CentoroApiService {
     async redeemVoucher(id) { return this.request('POST', `/vouchers/${id}/redeem`); }
     async getVoucherStats() { return this.request('GET', '/vouchers/stats'); }
 
-    // ============ ASSETS ============
     async getAssets() { return this.request('GET', '/assets'); }
     async getAsset(id) { return this.request('GET', `/assets/${id}`); }
     async createAsset(data) { return this.request('POST', '/assets', data); }
@@ -433,20 +438,17 @@ class CentoroApiService {
     async getAssetStats() { return this.request('GET', '/assets/stats'); }
     async getAvailableAssets() { return this.request('GET', '/assets/available'); }
 
-    // ============ EXPENSES ============
     async getExpenses() { return this.request('GET', '/expenses'); }
     async getExpense(id) { return this.request('GET', `/expenses/${id}`); }
     async createExpense(data) { return this.request('POST', '/expenses', data); }
     async updateExpense(id, data) { return this.request('PUT', `/expenses/${id}`, data); }
     async deleteExpense(id) { return this.request('DELETE', `/expenses/${id}`); }
 
-    // ============ PAYMENTS ============
     async getPayments() { return this.request('GET', '/payments'); }
     async getPayment(id) { return this.request('GET', `/payments/${id}`); }
     async createPayment(data) { return this.request('POST', '/payments', data); }
     async deletePayment(id) { return this.request('DELETE', `/payments/${id}`); }
 
-    // ============ CHATS ============
     async getChats() { return this.request('GET', '/chats'); }
     async getWebsiteChatSessions() { return this.request('GET', '/website/chat/sessions'); }
     async getWebsiteChatMessages(sessionId) { return this.request('GET', `/website/chat/messages/${encodeURIComponent(sessionId)}`); }
@@ -469,14 +471,12 @@ class CentoroApiService {
     async deleteChat(id) { return this.request('DELETE', `/chats/${id}`); }
     async getChatStats() { return this.request('GET', '/chats/stats'); }
 
-    // ============ STAFF CHAT ============
     async getStaffChats() { return this.request('GET', '/staff-chat'); }
     async getStaffChat(id) { return this.request('GET', `/staff-chat/${id}`); }
     async createStaffChat(data) { return this.request('POST', '/staff-chat', data); }
     async sendStaffMessage(id, data) { return this.request('POST', `/staff-chat/${id}/messages`, data); }
     async deleteStaffChat(id) { return this.request('DELETE', `/staff-chat/${id}`); }
 
-    // ============ SETTINGS ============
     async getCompanySettings() { return this.request('GET', '/settings/company'); }
     async updateCompanySettings(data) { return this.request('PUT', '/settings/company', data); }
     async getThemeSettings() { return this.request('GET', '/settings/theme'); }
@@ -484,14 +484,12 @@ class CentoroApiService {
     async getSecuritySettings() { return this.request('GET', '/settings/security/settings'); }
     async updateSecuritySettings(data) { return this.request('PUT', '/settings/security/settings', data); }
 
-    // ============ WEBSITE ============
     async getWebsiteStats() { return this.request('GET', '/website/stats'); }
     async getLatestWebsiteStats() { return this.request('GET', '/website/stats/latest'); }
     async createWebsiteStats(data) { return this.request('POST', '/website/stats', data); }
     async updateWebsiteStats(id, data) { return this.request('PUT', `/website/stats/${id}`, data); }
     async deleteWebsiteStats(id) { return this.request('DELETE', `/website/stats/${id}`); }
 
-    // ============ WEBSITE NEWS ============
     async getWebsiteNews() { return this.request('GET', '/website/news'); }
     async getPublishedNews() { return this.request('GET', '/website/news/published'); }
     async getNews(id) { return this.request('GET', `/website/news/${id}`); }
@@ -499,7 +497,6 @@ class CentoroApiService {
     async updateNews(id, data) { return this.request('PUT', `/website/news/${id}`, data); }
     async deleteNews(id) { return this.request('DELETE', `/website/news/${id}`); }
 
-    // ============ WEBSITE SLIDES ============
     async getSlides() { return this.request('GET', '/website/slides'); }
     async getActiveSlides() { return this.request('GET', '/website/slides/active'); }
     async getSlide(id) { return this.request('GET', `/website/slides/${id}`); }
@@ -507,27 +504,23 @@ class CentoroApiService {
     async updateSlide(id, data) { return this.request('PUT', `/website/slides/${id}`, data); }
     async deleteSlide(id) { return this.request('DELETE', `/website/slides/${id}`); }
 
-    // ============ WEBSITE PAGES ============
     async getWebsitePages() { return this.request('GET', '/website/pages'); }
     async getWebsitePage(id) { return this.request('GET', `/website/pages/${id}`); }
     async createWebsitePage(data) { return this.request('POST', '/website/pages', data); }
     async updateWebsitePage(id, data) { return this.request('PUT', `/website/pages/${id}`, data); }
     async deleteWebsitePage(id) { return this.request('DELETE', `/website/pages/${id}`); }
 
-    // ============ WEBSITE PRICES ============
     async getPrices() { return this.request('GET', '/website/prices'); }
     async getPrice(id) { return this.request('GET', `/website/prices/${id}`); }
     async createPrice(data) { return this.request('POST', '/website/prices', data); }
     async updatePrice(id, data) { return this.request('PUT', `/website/prices/${id}`, data); }
     async deletePrice(id) { return this.request('DELETE', `/website/prices/${id}`); }
 
-    // ============ PAYROLL ============
     async getPayroll(period) { return this.request('GET', `/payroll/period/${period}`); }
     async getPayrollSummary(period) { return this.request('GET', `/payroll/period/${period}/summary`); }
     async processPayroll(period) { return this.request('POST', `/payroll/period/${period}/process`); }
     async markPayrollPaid(recordId) { return this.request('POST', `/payroll/records/${recordId}/pay`); }
 
-    // ============ BANK TRANSACTIONS ============
     async getBankTransactions() { return this.request('GET', '/bank-transactions'); }
     async getBankTransaction(id) { return this.request('GET', `/bank-transactions/${id}`); }
     async createBankTransaction(data) { return this.request('POST', '/bank-transactions', data); }
