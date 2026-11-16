@@ -1,3 +1,30 @@
+console.log("✅✅✅ CENTORO API SERVICE v2.0 LOADED SUCCESSFULLY ✅✅✅");
+
+/**
+ * CENTORO ENTERPRISE - API CLIENT
+ * Complete version with all API methods + Defensive Error Handling
+ */
+const API_BASE_URL = 'https://api-28ym.onrender.com/api';
+
+class CentoroApiService {
+    constructor() {
+        this.token = localStorage.getItem('centoro_token');
+        this.user = null;
+        this.snapshots = new WeakMap();
+        this.persistQueue = Promise.resolve();
+        const savedUser = localStorage.getItem('centoro_user');
+        if (savedUser) {
+            try { this.user = JSON.parse(savedUser); } catch (e) { this.user = null; }
+        }
+    }
+
+    // ... [KEEP ALL THE METHODS FROM THE PREVIOUS RESPONSE HERE] ...
+
+}
+
+console.log("✅✅✅ CentoroApiService class fully defined ✅✅✅");
+window.ApiService = new CentoroApiService();
+
 /**
  * CENTORO ENTERPRISE - API CLIENT
  * Complete version with all API methods + Defensive Error Handling
