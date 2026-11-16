@@ -135,7 +135,6 @@ class CentoroApiService {
 
         const collections = pageCollections[pageName] || [];
         
-        // ✅ FIX: Defensive mapping so one missing function doesn't crash the whole page
         const results = await Promise.allSettled(collections.map(name => {
             const fn = common[name];
             if (typeof fn !== 'function') {
@@ -184,15 +183,103 @@ class CentoroApiService {
         return Object.keys(rates).map(code => ({ code, name: code, symbol: code, ratePerZAR: Number(rates[code]) || 0, base: code === response.data.base }));
     }
 
-    // ... [KEEP ALL YOUR EXISTING persistAdminData, AUTH, DASHBOARD, CLIENTS, STAFF, PROJECTS, INVOICES, JOB CARDS, VOUCHERS, ASSETS, EXPENSES, PAYMENTS, CHATS, STAFF CHAT, SETTINGS, WEBSITE, PAYROLL, BANK TRANSACTIONS METHODS EXACTLY AS THEY WERE] ...
+    // ==========================================
+    // CORE GETTERS (The previously missing methods)
+    // ==========================================
+    async getClients() { return this.request('GET', '/clients'); }
+    async getStaff() { return this.request('GET', '/staff'); }
+    async getProjects() { return this.request('GET', '/projects'); }
+    async getJobCards() { return this.request('GET', '/job-cards'); }
+    async getInvoices() { return this.request('GET', '/invoices'); }
+    async getChats() { return this.request('GET', '/chats'); }
+    async getVouchers() { return this.request('GET', '/vouchers'); }
+    async getAssets() { return this.request('GET', '/assets'); }
+    
+    async getCurrencyRates() { return this.request('GET', '/accounting/currency-rates'); }
+    async getTimezones() { return this.request('GET', '/timezones'); }
+    async getCalendarNotes() { return this.request('GET', '/calendar-notes'); }
+    async getCompanySettings() { return this.request('GET', '/settings'); }
+    async getAnalytics() { return this.request('GET', '/analytics'); }
+    
+    async getWebsiteStats() { return this.request('GET', '/website/stats'); }
+    async getWebsiteNews() { return this.request('GET', '/website/news'); }
+    async getSlides() { return this.request('GET', '/website/slides'); }
+    async getWebsitePages() { return this.request('GET', '/website/pages'); }
+    async getPrices() { return this.request('GET', '/website/prices'); }
+    async getPortfolio() { return this.request('GET', '/content/portfolio'); }
+    
+    async getExpenses() { return this.request('GET', '/accounting/expenses'); }
+    async getPayments() { return this.request('GET', '/accounting/payments'); }
+    async getPayroll(month) { return this.request('GET', `/payroll?month=${month}`); }
+    async getBankTransactions() { return this.request('GET', '/accounting/bank-transactions'); }
+    async getJournalEntries() { return this.request('GET', '/accounting/journal-entries'); }
+    async getChartAccounts() { return this.request('GET', '/accounting/chart-accounts'); }
+    
+    async getInventory() { return this.request('GET', '/inventory'); }
+    async getEmailAccounts() { return this.request('GET', '/email/accounts'); }
+    async getPhoneLines() { return this.request('GET', '/phone/lines'); }
+    async getPhoneContacts() { return this.request('GET', '/phone/contacts'); }
+    async getEmailCampaigns() { return this.request('GET', '/email/campaigns'); }
+    async getSmsProviders() { return this.request('GET', '/sms/providers'); }
+    async getSmsCampaigns() { return this.request('GET', '/sms/campaigns'); }
+    async getStaffChats() { return this.request('GET', '/staff-chats'); }
+    async getBinItems() { return this.request('GET', '/bin'); }
 
-    // ============ MUSIC & CONTENT (✅ ADDED MISSING METHODS) ============
+    // ==========================================
+    // MUSIC & CONTENT
+    // ==========================================
     async getTracks() { return this.request('GET', '/music/tracks'); }
     async getPacks() { return this.request('GET', '/music/packs'); }
     async getSamples() { return this.request('GET', '/music/samples'); }
     async getFridayDrops() { return this.request('GET', '/friday-drops'); }
     async getMonthlyOffers() { return this.request('GET', '/monthly-offers'); }
-    async getPortfolio() { return this.request('GET', '/content/portfolio'); } // Adjust endpoint if your controller uses a different path
+
+    // ==========================================
+    // CRUD OPERATIONS (Required by your HTML files)
+    // ==========================================
+    async createClient(data) { return this.request('POST', '/clients', data); }
+    async updateClient(id, data) { return this.request('PUT', `/clients/${id}`, data); }
+    async deleteClient(id) { return this.request('DELETE', `/clients/${id}`); }
+
+    async createProject(data) { return this.request('POST', '/projects', data); }
+    async updateProject(id, data) { return this.request('PUT', `/projects/${id}`, data); }
+    async deleteProject(id) { return this.request('DELETE', `/projects/${id}`); }
+
+    async createJobCard(data) { return this.request('POST', '/job-cards', data); }
+    async updateJobCard(id, data) { return this.request('PUT', `/job-cards/${id}`, data); }
+    async deleteJobCard(id) { return this.request('DELETE', `/job-cards/${id}`); }
+
+    async createCalendarNote(data) { return this.request('POST', '/calendar-notes', data); }
+    async updateCalendarNote(id, data) { return this.request('PUT', `/calendar-notes/${id}`, data); }
+    async deleteCalendarNote(id) { return this.request('DELETE', `/calendar-notes/${id}`); }
+
+    async createInvoice(data) { return this.request('POST', '/invoices', data); }
+    async updateInvoice(id, data) { return this.request('PUT', `/invoices/${id}`, data); }
+    async deleteInvoice(id) { return this.request('DELETE', `/invoices/${id}`); }
+
+    async createChat(data) { return this.request('POST', '/chats', data); }
+    async updateChat(id, data) { return this.request('PUT', `/chats/${id}`, data); }
+    
+    async createStaff(data) { return this.request('POST', '/staff', data); }
+    async updateStaff(id, data) { return this.request('PUT', `/staff/${id}`, data); }
+    async deleteStaff(id) { return this.request('DELETE', `/staff/${id}`); }
+
+    // ==========================================
+    // AUTH METHODS
+    // ==========================================
+    async login(credentials) {
+        const response = await this.request('POST', '/auth/login', credentials);
+        if (response.data && response.data.token) {
+            this.setToken(response.data.token);
+            this.setUser(response.data.user);
+        }
+        return response;
+    }
+
+    logout() {
+        this.clearToken();
+        window.location.replace('login.html');
+    }
 }
 
 window.ApiService = new CentoroApiService();
