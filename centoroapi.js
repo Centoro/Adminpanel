@@ -1,32 +1,5 @@
-console.log("✅✅✅ CENTORO API SERVICE v2.0 LOADED SUCCESSFULLY ✅✅✅");
-
 /**
- * CENTORO ENTERPRISE - API CLIENT
- * Complete version with all API methods + Defensive Error Handling
- */
-const API_BASE_URL = 'https://api-28ym.onrender.com/api';
-
-class CentoroApiService {
-    constructor() {
-        this.token = localStorage.getItem('centoro_token');
-        this.user = null;
-        this.snapshots = new WeakMap();
-        this.persistQueue = Promise.resolve();
-        const savedUser = localStorage.getItem('centoro_user');
-        if (savedUser) {
-            try { this.user = JSON.parse(savedUser); } catch (e) { this.user = null; }
-        }
-    }
-
-    // ... [KEEP ALL THE METHODS FROM THE PREVIOUS RESPONSE HERE] ...
-
-}
-
-console.log("✅✅✅ CentoroApiService class fully defined ✅✅✅");
-window.ApiService = new CentoroApiService();
-
-/**
- * CENTORO ENTERPRISE - API CLIENT
+ * CENTORO ENTERPRISE - API CLIENT v2.0
  * Complete version with all API methods + Defensive Error Handling
  */
 const API_BASE_URL = 'https://api-28ym.onrender.com/api';
@@ -211,7 +184,7 @@ class CentoroApiService {
     }
 
     // ==========================================
-    // CORE GETTERS (The previously missing methods)
+    // CORE GETTERS
     // ==========================================
     async getClients() { return this.request('GET', '/clients'); }
     async getStaff() { return this.request('GET', '/staff'); }
@@ -262,7 +235,7 @@ class CentoroApiService {
     async getMonthlyOffers() { return this.request('GET', '/monthly-offers'); }
 
     // ==========================================
-    // CRUD OPERATIONS (Required by your HTML files)
+    // CRUD OPERATIONS
     // ==========================================
     async createClient(data) { return this.request('POST', '/clients', data); }
     async updateClient(id, data) { return this.request('PUT', `/clients/${id}`, data); }
