@@ -535,8 +535,10 @@
 <script src="centoroapi.js"></script>
 <script src="index.js"></script>
 <script>
+  // Initialize the App
   initApp('index.html', 'Dashboard');
 
+  // Ensure local DB collections exist
   if (!DB.calendarNotes) DB.calendarNotes = [];
   if (!DB.internalChats) DB.internalChats = [];
   if (!DB.dashboardLayout) DB.dashboardLayout = { sections: [], inner: {} };
@@ -556,90 +558,41 @@
   ];
 
   const DASH_SERVICE_OPTIONS = [
-    'Graphic Design',
-    'Web & App Development',
-    'Videography & Photography',
-    'Music Production & Mixing',
-    'Studio Recording',
-    'Mixing & Mastering',
-    'Marketing & Promotions',
-    'Event Coverage',
-    'Beat Lease',
-    'Technical Support',
-    'Custom'
+    'Graphic Design', 'Web & App Development', 'Videography & Photography',
+    'Music Production & Mixing', 'Studio Recording', 'Mixing & Mastering',
+    'Marketing & Promotions', 'Event Coverage', 'Beat Lease',
+    'Technical Support', 'Custom'
   ];
 
   const JOB_TYPES = [
-    'Walk-through',
-    'Service Delivery',
-    'Client Consultation',
-    'Complaint',
-    'Account Checking',
-    'Delivery',
-    'IT Department',
-    'Office Admin',
-    'Accounting',
-    'Customer Support',
-    'Creative / Design',
-    'Development',
-    'Management',
-    'Custom'
+    'Walk-through', 'Service Delivery', 'Client Consultation', 'Complaint',
+    'Account Checking', 'Delivery', 'IT Department', 'Office Admin',
+    'Accounting', 'Customer Support', 'Creative / Design', 'Development',
+    'Management', 'Custom'
   ];
 
   const DEFAULT_TEAM_NAMES = [
-    'Creative Team',
-    'Dev Team',
-    'IT Department',
-    'Office Admin',
-    'Accounting',
-    'Management',
-    'Marketing',
-    'Operations',
-    'Customer Support'
+    'Creative Team', 'Dev Team', 'IT Department', 'Office Admin',
+    'Accounting', 'Management', 'Marketing', 'Operations', 'Customer Support'
   ];
 
   function ensureDashboardServices() {
     if (!DB.services) DB.services = [];
-
     const required = [
-      {
-        name: 'Studio Recording',
-        price: 350,
-        type: 'hourly',
-        category: 'Music'
-      },
-      {
-        name: 'Mixing & Mastering',
-        price: 800,
-        type: 'project',
-        category: 'Music'
-      }
+      { name: 'Studio Recording', price: 350, type: 'hourly', category: 'Music' },
+      { name: 'Mixing & Mastering', price: 800, type: 'project', category: 'Music' }
     ];
-
     function norm(str) {
-      return String(str || '')
-        .toLowerCase()
-        .replace(/&/g, 'and')
-        .replace(/\s+/g, ' ')
-        .trim();
+      return String(str || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
     }
-
     let changed = false;
-
     required.forEach(req => {
       const exists = DB.services.some(s => norm(s.name).includes(norm(req.name)));
       if (!exists) {
-        DB.services.push({
-          id: nextId('SRV', 'services'),
-          name: req.name,
-          price: req.price,
-          type: req.type,
-          category: req.category
-        });
+        DB.services.push({ id: nextId('SRV', 'services'), name: req.name, price: req.price, type: req.type, category: req.category });
         changed = true;
       }
     });
-
     if (changed) saveDB();
   }
   ensureDashboardServices();
@@ -1186,13 +1139,7 @@
   function ensureInternalChat(date) {
     let chat = DB.internalChats.find(c => c.date === date);
     if (!chat) {
-      chat = {
-        id: nextId('ICH', 'internalChats'),
-        date,
-        subject: 'Team discussion',
-        cc: [],
-        messages: []
-      };
+      chat = { id: nextId('ICH', 'internalChats'), date, subject: 'Team discussion', cc: [], messages: [] };
       DB.internalChats.push(chat);
       saveDB();
     }
@@ -1458,25 +1405,26 @@
       renderAll();
       openCalDate(selectedCalDate);
     } catch (error) {
-      alert(error.message || 'Unable to save calendar note to the API.');
+      // Fallback to local DB if API fails
+      DB.calendarNotes.push(note);
+      saveDB();
+      closeM('cal-note-modal');
+      renderAll();
+      openCalDate(selectedCalDate);
+      alert('Saved locally (API unavailable).');
     }
   }
 
   function tzTime(zone) {
     try {
-      // ✅ FIX: Added 'second: 2-digit' so the clock actually ticks visibly
       return new Date().toLocaleTimeString('en-ZA', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch(e) {
-      return '—';
-    }
+    } catch(e) { return '—'; }
   }
 
   function tzDate(zone) {
     try {
       return new Date().toLocaleDateString('en-ZA', { timeZone: zone, day: '2-digit', month: 'short', year: 'numeric' });
-    } catch(e) {
-      return '—';
-    }
+    } catch(e) { return '—'; }
   }
 
   function renderDashWidgets() {
@@ -1521,9 +1469,7 @@
 
       let badge = '';
       if (!j.projectId) {
-        badge = internalTypes.includes(j.type)
-          ? '<span class="badge badge-neutral">Internal</span>'
-          : '<span class="badge badge-neutral">Walk-in</span>';
+        badge = internalTypes.includes(j.type) ? '<span class="badge badge-neutral">Internal</span>' : '<span class="badge badge-neutral">Walk-in</span>';
       }
 
       return `<tr style="cursor:pointer;" onclick="location.href='jobcards.html'">
@@ -1544,7 +1490,7 @@
     document.getElementById('k-proj').textContent = DB.projects.filter(p => p.status !== 'completed').length;
     document.getElementById('k-comp').textContent = DB.chats.filter(c => c.status === 'open').length;
 
-    const ys = DB.website.yearlyStats;
+    const ys = DB.website.yearlyStats || {};
     document.getElementById('year-bars').innerHTML = Object.entries(ys).map(([yr, y]) => {
       const target = y.target || Math.max(y.revenue, 1);
       const pct = Math.min(100, y.revenue / target * 100);
@@ -1709,14 +1655,11 @@
   applyDashboardLayout();
   enableDashboardDrag();
 
-  // ✅ NEW: Live Global Time Zone Ticker
   function tickTimeZones() {
-    // Update dashboard widget timezones
     const widgetZones = TIME_ZONES.slice(0, 3).map(z => `<strong>${z.city}</strong> ${tzTime(z.zone)}`).join(' &nbsp;|&nbsp; ');
     const dashTzEl = document.getElementById('dash-timezones');
     if (dashTzEl) dashTzEl.innerHTML = widgetZones;
 
-    // Update modal timezones
     const tzModalTable = document.getElementById('tz-modal-table');
     if (tzModalTable) {
       tzModalTable.innerHTML = TIME_ZONES.map(z => `<tr>
@@ -1728,119 +1671,30 @@
     }
   }
 
-  // Start ticking every second
   setInterval(tickTimeZones, 1000);
-</script>
-<script>
-let dashboardSupportLoaded = false;
 
-async function loadDashboardSupportData() {
-  if (dashboardSupportLoaded) return;
-  const [ratesResult, zonesResult, notesResult] = await Promise.allSettled([
-    ApiService.getCurrencyRates(),
-    ApiService.getTimezones(),
-    ApiService.getCalendarNotes()
-  ]);
+  // Render local first (ensures UI is populated even if API is down)
+  renderAll();
 
-  if (ratesResult.status === 'fulfilled') {
-    const payload = ratesResult.value.data || {};
-    const rates = payload.rates || {};
-    DB.currencies = [
-      { code: 'ZAR', name: 'South African Rand', symbol: 'R', ratePerZAR: 1, base: true },
-      ...Object.entries(rates).map(([code, rate]) => ({
-        code,
-        name: code,
-        symbol: code,
-        ratePerZAR: Number(rate) || 0,
-        base: false
-      }))
-    ];
-  }
-
-  if (zonesResult.status === 'fulfilled') {
-    TIME_ZONES = (zonesResult.value.data || []).map(zone => ({
-      city: zone.city || zone.zone,
-      zone: zone.zone,
-      time: zone.time,
-      date: zone.date
-    }));
-  }
-
-  if (notesResult.status === 'fulfilled') {
-    DB.calendarNotes = (notesResult.value.data || []).map(note => ({
-      ...note,
-      id: String(note.id),
-      date: String(note.date).slice(0, 10)
-    }));
-  }
-
-  dashboardSupportLoaded = true;
-}
-
-// Enhance existing renderAll to use API for live data
-window.renderAll = async function() {
-  const layout = document.querySelector('.app-layout');
-  const showMessage = (id, message, colspan = 1) => {
-    const element = document.getElementById(id);
-    if (!element) return;
-    element.innerHTML = element.tagName === 'TBODY'
-      ? `<tr><td colspan="${colspan}" style="padding:16px;text-align:center;color:var(--text-muted);">${message}</td></tr>`
-      : `<div style="padding:16px;color:var(--text-muted);">${message}</div>`;
+  // Override logout to clear API token
+  const originalLogout = window.logout;
+  window.logout = function() {
+    if (window.ApiService) ApiService.logout();
+    if (typeof originalLogout === 'function') originalLogout();
   };
 
+  // Background API sync (updates UI when it finishes, or silently fails)
+  window.addEventListener('load', async () => {
     try {
-    await loadDashboardSupportData();
-    const [stats, projects, invoices, jobs] = await Promise.all([
-      ApiService.getDashboardStats(),
-      ApiService.getProjects(),
-      ApiService.getInvoices(),
-      ApiService.getJobCards()
-    ]);
-    const d = stats.data || {};
-    const invoiceRows = invoices.data || [];
-    const jobRows = jobs.data || [];
-
-    document.getElementById('k-rev').textContent = 'R ' + Number(d.totalRevenue || 0).toLocaleString('en-ZA');
-    document.getElementById('k-out').textContent = 'R ' + Number(d.totalOutstanding || 0).toLocaleString('en-ZA');
-    document.getElementById('k-proj').textContent = d.activeProjects || 0;
-    document.getElementById('k-comp').textContent = d.openChats || 0;
-
-    const invoiceTable = document.getElementById('inv-table');
-    if (invoiceTable) invoiceTable.innerHTML = invoiceRows.slice(0, 5).map(invoice => `<tr><td><strong>#${invoice.trackingNumber || invoice.id || '—'}</strong></td><td>${invoice.clientId || '—'}</td><td>R ${Number(invoice.total || 0).toLocaleString('en-ZA')}</td><td>R ${Number(invoice.paid || 0).toLocaleString('en-ZA')}</td><td>${invoice.status || '—'}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No invoices found.</td></tr>';
-
-    const jobsTable = document.getElementById('dash-jobs-table');
-    if (jobsTable) jobsTable.innerHTML = jobRows.slice(0, 5).map(job => `<tr><td>${job.title || job.name || '—'}</td><td>${job.clientId || '—'}</td><td>${job.assigneeId || '—'}</td><td>${job.dueDate || '—'}</td><td>${job.status || '—'}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">No job cards found.</td></tr>';
-
-    showMessage('year-bars', 'Live data connected.');
-    showMessage('alert-list', 'No live alerts loaded.');
-    showMessage('activity-list', 'No live activity loaded.');
-    renderDashWidgets();
-    renderRatesModal();
-    renderTimeZones();
-    } catch (error) {
-    console.error('Dashboard API unavailable:', error.message);
-    ['k-rev', 'k-out', 'k-proj', 'k-comp'].forEach(id => { const element = document.getElementById(id); if (element) element.textContent = '—'; });
-    showMessage('year-bars', 'Unable to load live dashboard data.');
-    showMessage('alert-list', 'Unable to load live dashboard data.');
-    showMessage('activity-list', 'Unable to load live dashboard data.');
-    showMessage('dash-currencies', 'Unable to load live dashboard data.');
-    showMessage('dash-timezones', 'Unable to load live dashboard data.');
-    showMessage('inv-table', 'Unable to load live dashboard data.');
-    showMessage('dash-jobs-table', 'Unable to load live dashboard data.');
+      // Wait for API to load if token exists
+      if (window.ApiService && ApiService.isAuthenticated()) {
+        await ApiService.syncAdminData('index.html', DB);
+        renderAll();
+      }
+    } catch (err) {
+      console.warn('Background API sync failed, using local data.', err);
     }
-  if (layout) layout.classList.add('app-ready');
-};
-
-      renderAll();
-
-// Override logout to clear API token
-const originalLogout = window.logout;
-window.logout = function() {
-    ApiService.logout();
-    if (typeof originalLogout === 'function') {
-        originalLogout();
-    }
-};
+  });
 </script>
 </body>
 </html>
