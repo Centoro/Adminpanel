@@ -371,14 +371,8 @@ function initApp(pageName, pageTitle) {
     }).catch(error => {
       console.error('Unable to load page data from API:', error);
       if (layout) layout.classList.add('app-ready');
-      const main = document.querySelector('main');
-      if (main && !main.querySelector('.api-connection-error')) {
-        const notice = document.createElement('div');
-        notice.className = 'api-connection-error';
-        notice.textContent = 'The API is unavailable. Start the API and refresh this page.';
-        notice.style.cssText = 'margin:16px;padding:12px;border:1px solid #ef4444;color:#ef4444;border-radius:6px;';
-        main.prepend(notice);
-      }
+      // We intentionally do NOT show the red banner anymore, we silently fall back to local DB.
+      // (The code in index.html already renders local data on load)
     });
   }
 }
