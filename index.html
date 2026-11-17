@@ -1686,7 +1686,6 @@
   // Background API sync (updates UI when it finishes, or silently fails)
   window.addEventListener('load', async () => {
     try {
-      // Wait for API to load if token exists
       if (window.ApiService && ApiService.isAuthenticated()) {
         await ApiService.syncAdminData('index.html', DB);
         renderAll();
